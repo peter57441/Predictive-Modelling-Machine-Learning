@@ -1,0 +1,336 @@
+---
+title: "Opgavesæt 4"
+output: html_document
+date: "2023-03-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Opgave 1 a), b) og c)
+
+Vi tager udgangspunkt i datasættet **biluheld.txt** for at prædiktere variablen *doed*. Nedenfor indlæsser vi data, standardiserer input-variablene og deler datasættet i et train/test-split med 30% i testdatasættet.
+
+
+```{r}
+library(keras)
+library(tensorflow)
+library(ggplot2)
+library(readr)
+```
+
+
+
+
+
+```{r}
+
+
+
+# Indlæser data
+biluheld <- read_delim("biluheld.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+
+### opdeling i input og output ###
+xBiluheld <- model.matrix(Doed~.,biluheld)[,-1]
+yBiluheld <- biluheld$Doed
+
+N <- length(yBiluheld)
+
+### normalisering af input  ###
+for (i in 1:ncol(xBiluheld)){
+  xBiluheld[,i] <- (xBiluheld[,i]-mean(xBiluheld[,i]))/sd(xBiluheld[,i])
+}
+
+
+### opdeling i træning og test ###
+set.seed(2023)
+train <- sample(1:N,floor(0.7*N))
+test <- (1:N)[-train]
+
+```
+
+
+### Opgave 1 d)
+
+Vi fitter nu et neuralt netværk (NN) med 1 hidden layer og 6 hidden units, hvor sigmoid-funktionen benyttes som activation function i output-laget. Jeg lader 20% af testdata blive benyttet til validering. 
+
+
+```{r}
+
+##### modelbygning og fit
+model <- keras_model_sequential() %>%
+  layer_dense(units = 6, activation = "sigmoid", input_shape = ncol(xBiluheld)) %>%
+  layer_dense(units = 1, activation = "sigmoid") %>%
+
+  compile(
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)    
+)
+
+fit1 <- model %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    validation_split = 0.2,
+    verbose = FALSE
+  )
+
+```
+
+### Opgave 1.e 
+
+summary af modellen 
+
+```{r}
+summary(model)
+```
+
+Der er 85 parametre i alt. Hvilket passer med antal input (12) gange 6 hidden units plus 12 + 1 bias led i output layer dvs. $12 \cdot 6 + 12+1=85$.
+
+### Opgave 1.f og 1.g
+
+Plot af modellens fit MSE
+
+```{r}
+
+plot(fit1$metrics$loss[5:400], type="l")
+lines(fit1$metrics$val_loss[5:400], col="red")
+
+```
+
+
+Jf. estimationsprocessen minimeres MSE ved højere epoch uden at validation loss stiger. Dermed ville vi ikke vurdere at der umiddelbart er tale om overfit, da validerings MSE ikke "stikker" af fra trænings MSE.
+
+### Opgave 1 h
+
+Vi gør samme procedure som før, men med 2 hidden layes og vurderer trænnings-loss og validation-loss.
+
+
+```{r}
+
+
+##### modelbygning og fit
+model2 <- keras_model_sequential() %>%
+  layer_dense(units = 10, activation = "sigmoid", input_shape = ncol(xBiluheld)) %>%
+  layer_dense(units = 9, activation = "sigmoid") %>%
+  layer_dense(units = 1, activation = "sigmoid") %>%
+
+  compile(
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)    
+)
+
+fit2 <- model2 %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    validation_split = 0.2,
+    verbose = FALSE
+  )
+
+```
+
+
+### summary af modellen 
+
+```{r}
+summary(model2)
+```
+
+### Plot af modellens fit MSE
+
+
+```{r}
+
+
+plot(fit2$metrics$loss[5:400], type="l")
+lines(fit2$metrics$val_loss[5:400], col="red")
+
+```
+
+
+Validerings-loss stiger, hvorfor der nu umiddelbart vil være tale om overfit. Hvorfor det kan være relevant at tale om regularisering.
+
+
+## Opgave 1 i
+
+Vi inkluderer nu $L_2$-regularisering (Ridge) og dropout i hvert af lagene. Dvs. vi minimerer:
+
+$$R(\theta) = \sum_{i=1}^N (y_i-f(x_i))^2+\lambda \sum_{\ell=1}^q \omega_{\ell}^2$$
+
+Vi sætter $\lambda = 0.00001$ og dropout sandsynligheden sættes til $p = 0.05$. Og vi gentager samme procedure som tidligere derefter:
+
+
+```{r}
+
+
+##### modelbygning og fit
+
+lambda <- 0.00001
+dropout_rate <- 0.005
+
+model3 <- keras_model_sequential() %>%
+  layer_dense(units = 10, activation = "sigmoid", input_shape = ncol(xBiluheld), kernel_regularizer = regularizer_l2(lambda)) %>%
+  layer_dropout(rate=dropout_rate) %>%
+  layer_dense(units = 9, activation = "sigmoid", kernel_regularizer = regularizer_l2(lambda)) %>%
+  layer_dropout(rate=dropout_rate) %>%
+  layer_dense(units = 1, activation = "sigmoid") %>%
+
+  compile(
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)    
+)
+
+fit3 <- model3 %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    validation_split = 0.2,
+    verbose = FALSE
+  )
+
+
+
+
+
+```
+
+
+### summary af modellen 
+
+```{r}
+summary(model3)
+```
+
+### Plot af modellens fit MSE
+
+
+```{r}
+
+
+plot(fit3$metrics$loss[5:400], type="l")
+lines(fit3$metrics$val_loss[5:400], col="red")
+
+```
+
+
+Validerings-loss virker ikke længere til at stige og tænings-loss falder fortsat. Umiddelbart ville vi derfor ikke længere mene, at der er tale om overfit.
+
+
+## Opgave 1 j
+
+
+Vi vælger nu den bedste model med fit på hele træningsdatasættet (vi fjerne validation-split), og afprøver dens performance på testdatasættet. Vi udregner også fejlrate og AUC.
+
+```{r}
+
+
+fit1_no_val <- model %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    verbose = FALSE
+  )
+
+fit2_no_val <- model2 %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    verbose = FALSE
+  )
+
+
+
+fit3_no_val <- model3 %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    verbose = FALSE
+  )
+
+
+
+
+
+
+```
+
+
+Vi kigger nu på performance
+
+
+```{r}
+library(pROC)
+
+# Model 1
+pred.prob1 <- model %>% predict(xBiluheld[test,])
+pred.value1<-1*(pred.prob1>0.5)
+table(pred.value1,yBiluheld[test])
+mean(pred.value1!=yBiluheld[test])
+print(auc(yBiluheld[test]~pred.prob1,direction='<'))
+
+
+
+
+
+```
+```{r}
+
+# Model 2
+pred.prob2 <- model2 %>% predict(xBiluheld[test,])
+pred.value2<-1*(pred.prob2>0.5)
+table(pred.value2,yBiluheld[test])
+mean(pred.value2!=yBiluheld[test])
+print(auc(yBiluheld[test]~pred.prob2,direction='<'))
+
+
+```
+
+```{r}
+
+# Model 3
+pred.prob3 <- model3 %>% predict(xBiluheld[test,])
+pred.value3<-1*(pred.prob3>0.5)
+table(pred.value3,yBiluheld[test])
+mean(pred.value3!=yBiluheld[test])
+print(auc(yBiluheld[test]~pred.prob3,direction='<'))
+
+
+```
+
+Umiddelbart virker det til, at det er den første model der har den bedste performance. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

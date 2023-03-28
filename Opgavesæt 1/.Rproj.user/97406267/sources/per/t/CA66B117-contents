@@ -1,0 +1,453 @@
+---
+title: "Opgavesæt 1 (PML)"
+output: html_document
+date: "2023-02-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+# Del 1: Lineære metoder til regression
+
+Indlæs *Salgspriser.txt*. Jeg splitter datasættet i test og train med 60-40 split.
+
+```{r}
+library(caret)
+
+Salgspriser <- read.delim("./Salgspriser.txt")
+Salgspriser$Postnummer <- as.factor(Salgspriser$Postnummer)
+
+# Set the seed for reproducibility
+set.seed(123)
+
+# Split the dataset into train and test sets
+trainIndex <- createDataPartition(Salgspriser$Kvadratmeterpris, p = 0.6, list = FALSE)
+train <- Salgspriser[trainIndex,]
+test <- Salgspriser[-trainIndex,]
+```
+
+## Lineær regression (OLS)
+
+```{r}
+
+# Fit the linear regression model
+lin.model <- lm(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar, data = train)
+koeff <- lin.model$coefficients
+
+# Make predictions on the test set
+Xmat.test <- model.matrix(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar, data = test)
+predictions <- Xmat.test %*% koeff
+
+# Calculate the MSE and RMSE for the test set predictions
+MSE.lin <- mean((test$Kvadratmeterpris - predictions)^2)
+RMSE_OLS <- sqrt(MSE.lin)
+
+# Print the results
+cat("MSE:", MSE.lin, "\n")
+cat("RMSE:", RMSE_OLS, "\n")
+
+
+
+
+
+```
+## Best subset
+
+```{r}
+#### best subset selection
+
+
+library(leaps)
+
+fit.subset<-regsubsets(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar,test,nvmax=11)
+summary(fit.subset)
+
+summary(fit.subset)$rss
+summary(fit.subset)$rsq
+summary(fit.subset)$adjr2
+summary(fit.subset)$cp
+summary(fit.subset)$bic
+
+## prædiktion
+Xmat.test<-model.matrix(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar,data=test)
+
+coef_BSS<-coef(fit.subset,id=2)
+predictions<-Xmat.test[,names(coef_BSS)]%*%coef_BSS
+MSE_BSS <- mean((test$Kvadratmeterpris-predictions)^2)
+RMSE_BSS <- sqrt(MSE_BSS)
+```
+
+## Ridge
+
+```{r}
+library(glmnet)
+
+x <- model.matrix(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar, train)[, -1]
+y <- train$Kvadratmeterpris
+ridge.mod <- glmnet(x, y, alpha = 0)
+
+plot(ridge.mod,label=TRUE,xvar='lambda')
+
+x_test <- model.matrix(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar, test)[, -1]
+y_test <- test$Kvadratmeterpris
+y_pred <- predict(ridge.mod, newx = x_test)
+MSE_Ridge <- mean((y_test - y_pred)^2)
+
+RMSE_Ridge <- sqrt(MSE_Ridge)
+```
+
+## Lasso
+
+```{r}
+# Training data
+x <- model.matrix(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar, train)[, -1]
+y <- train$Kvadratmeterpris
+
+# Fit Lasso model
+
+lasso.mod <- glmnet(x, y, alpha = 1)
+
+# Plot the coefficients
+plot(lasso.mod, label=TRUE, xvar='lambda')
+
+# Extract the coefficients for the chosen lambda
+lambda_chosen <- lasso.mod$lambda.min  # or any other value of lambda that you want to use
+coef_lasso <- coef(lasso.mod, s = lambda_chosen)
+
+lasso.mod.final <- glmnet(x, y, alpha = 1)
+predict(lasso.mod.final,type='coefficients',s=lambda_chosen)
+
+# Testing data
+x_test <- model.matrix(Kvadratmeterpris ~ Kvadratmeter*Postnummer + Hustype*Postnummer + AntalVarelser + Byggeaar, test)[, -1]
+y_test <- test$Kvadratmeterpris
+
+# Make predictions using the Lasso model and calculate the RMSE
+y_pred <- predict(lasso.mod.final, newx = x_test, s = lambda_chosen)
+MSE_Lasso <- mean((y_test - y_pred)^2)
+RMSE_Lasso <- sqrt(MSE_Lasso)
+
+```
+
+
+Opsumering af RMSE for de forskellige metoder:
+
+```{r}
+
+cat("RMSE_OLS:", RMSE_OLS, "\n")
+cat("RMSE_BSS:", RMSE_BSS, "\n")
+cat("RMSE_Ridge:", RMSE_Ridge, "\n")
+cat("RMSE_Lasso:", RMSE_Lasso, "\n")
+
+```
+Det virker til at BSS prædikterer bedst pt.
+
+Jeg sammenligner koefficienter fra Lasso og BSS:
+
+```{r}
+
+print(coef_BSS)
+
+
+```
+
+Sjovt nok virker det til at antallet af kvadratmetre reducerer kvadratmeterprisen (måske pga. mange kvadratmetre ikke er lig en lejlighed, hvor kvm prisen oftest er højere). Lasso straffer små beta værdier, hvorfor Lasso muligvis vil udlade variable som BSS ellers ville inkludere. 
+
+# Del 2: Lineære metoder til klassifikation
+
+Jeg indlæser datasættet *Tilsalgs.txt* og opdeler i test-train 60-40 split:
+
+```{r}
+library(tidyverse)
+library(caret)
+library(glmnet)
+
+Tilsalg <- read.delim("./Tilsalg.txt")
+Tilsalg$Postnummer <- as.factor(Tilsalg$Postnummer)
+Tilsalg <- select(Tilsalg, c('AntalVarelser', 'NetPrMd', 'Kvadratmeter', 'KvadratmeterGrund', 'Byggeaar', 'Kvadratmeterpris', 'Postnummer', 'Hustype', 'Solgt180'))
+
+# Set the seed for reproducibility
+set.seed(123)
+
+# Split the dataset into train and test sets
+trainIndex <- createDataPartition(Tilsalg$Solgt180, p = 0.6, list = FALSE)
+train <- Tilsalg[trainIndex,]
+test <- Tilsalg[-trainIndex,]
+
+Solgt180_test <- test$Solgt180
+```
+
+## Almindelig logistisk regression
+
+```{r}
+library(pROC)
+
+fit.logistic <- glm(Solgt180 ~ .,data=train,family='binomial')
+summary(fit.logistic)
+
+pred.prob <- predict(fit.logistic, newdata = test, type='response')
+pred.value <- 1*(pred.prob>0.5)
+table(pred.value,Solgt180_test)
+
+mean(pred.value!=Solgt180_test)
+
+
+plot(roc(Solgt180_test~pred.prob,direction='<'),main = "ROC curve for Logistic regression", print.auc = TRUE)
+auc(Solgt180_test~pred.prob,direction='<')
+
+```
+
+## Regulariseret logistisk regression (Ridge)
+
+```{r}
+
+# Create a vector of class labels (y)
+y <- Tilsalg$Solgt180
+
+# Create the design matrix (x)
+x <- model.matrix(Solgt180 ~ ., data = Tilsalg)[,-1]
+
+# Split the data into a 60-40 train-test split
+train_index <- createDataPartition(y, p = 0.6, list = FALSE)
+x_train <- x[train_index, ]
+y_train <- y[train_index]
+x_test <- x[-train_index, ]
+y_test <- y[-train_index]
+
+
+ridge.mod <- glmnet(x_train, y_train, alpha = 0, family = 'binomial')
+plot(ridge.mod, label = TRUE, xvar = 'lambda')
+
+cv.ridge.train <- cv.glmnet(x_train, y_train, alpha = 0, family = 'binomial', type.measure ='auc')
+plot(cv.ridge.train)
+best.lambda <- cv.ridge.train$lambda.min
+best.lambda
+ridge.mod.final <- glmnet(x_train, y_train, alpha = 0)
+predict(ridge.mod.final, type = 'coefficients', s = best.lambda)
+
+# Optimize for auc in the test data set.
+# If you want to optimize for error rate instead, use 'class' instead of 'auc'.
+pred.prob.ridge <- as.vector(predict(ridge.mod.final, s = best.lambda, newx = x_test))
+pred.value.ridge <- 1*(pred.prob.ridge > 0.5)
+
+plot(roc(y_test ~ pred.prob.ridge, direction='<'),main = "ROC curve for Logistic regression (Ridge)", print.auc = TRUE)
+auc(y_test ~ pred.prob.ridge, direction='<')
+mean(pred.value.ridge != y_test)
+
+```
+
+## Regulariseret logistisk regression (Lasso)
+
+```{r}
+
+# Fit the Lasso model on the training data
+lasso.mod <- glmnet(x_train, y_train, alpha = 1, family = 'binomial')
+
+# Plot the Lasso coefficient path
+plot(lasso.mod, xvar = 'lambda', label = TRUE)
+
+# Perform cross-validation to select the best lambda value
+cv.lasso.train <- cv.glmnet(x_train, y_train, alpha = 1, family = 'binomial', type.measure = 'auc')
+plot(cv.lasso.train)
+
+# Get the best lambda value
+best.lambda <- cv.lasso.train$lambda.min
+
+# Fit the final Lasso model on the training data using the best lambda value
+lasso.mod.final <- glmnet(x_train, y_train, alpha = 1)
+predict(lasso.mod.final, type = 'coefficients', s = best.lambda)
+
+# Make predictions on the test data using the final Lasso model
+pred.prob.lasso <- as.vector(predict(lasso.mod.final, s = best.lambda, newx = x_test))
+pred.value.lasso <- 1 * (pred.prob.lasso > 0.5)
+
+# Plot the ROC curve and calculate the AUC
+plot(roc(y_test ~ pred.prob.lasso, direction = '<'),main = "ROC curve for Logistic regression (Lasso)", print.auc = TRUE)
+auc(y_test ~ pred.prob.lasso, direction = '<')
+
+# Calculate the classification error rate
+mean(pred.value.lasso != y_test)
+```
+
+# LDA
+
+```{r}
+library(MASS)
+library(pROC)
+
+# Create a vector of class labels (y)
+y <- Tilsalg$Solgt180
+
+# Create the design matrix (x)
+x <- model.matrix(Solgt180 ~ ., data = Tilsalg)[,-1]
+
+# Split the data into a 60-40 train-test split
+train_index <- createDataPartition(y, p = 0.6, list = FALSE)
+x_train <- x[train_index, ]
+y_train <- y[train_index]
+x_test <- x[-train_index, ]
+y_test <- y[-train_index]
+
+# Fit LDA model to training data
+lda.fit <- lda(x_train, y_train)
+
+# Predict class labels for test data using LDA model
+lda.pred <- predict(lda.fit, x_test)
+
+# Calculate classification accuracy on test data
+accuracy <- mean(lda.pred$class == y_test)
+print(paste0("Classification accuracy: ", accuracy))
+
+# Plot ROC curve
+roc.curve <- roc(y_test, lda.pred$posterior[,2])
+plot(roc.curve, main = "ROC curve for LDA", print.auc = TRUE)
+
+
+
+
+```
+## QDA
+
+```{r}
+# Fit QDA model to training data
+qda.fit <- qda(x_train, y_train)
+
+# Predict class labels for test data using QDA model
+qda.pred <- predict(qda.fit, x_test)
+
+# Calculate classification accuracy on test data
+accuracy <- mean(qda.pred$class == y_test)
+print(paste0("Classification accuracy: ", accuracy))
+
+# Plot ROC curve
+roc.curve <- roc(y_test, qda.pred$posterior[,2])
+plot(roc.curve, main = "ROC curve for QDA", print.auc = TRUE)
+
+```
+
+
+
+# Del 3: Illustration af virkningen af ridge og lasso mht. bias og varians
+
+Grundideen er at simulere data fra den lineære model
+
+$Y = \beta_0 + \beta_1X_1 +\beta_2X_2 + \beta_3X_3 + \beta_4X_4 + \beta_5X_5 + \beta_6X_6 + \xi$
+
+hvor $\xi \sim N(0,1)$, og hvor 
+
+$\beta_0 = 2,   \beta_1 = 0.2, \beta_2 = -0.6, \beta_3 = 2, \beta_4 = 0.001, \beta_5=0, \beta_6=-1$
+
+Nedenfor simuleres data 
+
+```{r}
+library(glmnet)
+set.seed(1)
+nsim<-1000
+N<-25
+beta<-c(2,0.5,-0.6,2,0.001,0,-1)
+
+
+par.beta3<-matrix(rep(NA,5*nsim),ncol=5)
+par.beta5<-matrix(rep(NA,5*nsim),ncol=5)
+
+ypred.linreg<-rep(0,nsim)
+ypred.ridge01<-rep(0,nsim)
+ypred.ridge03<-rep(0,nsim)
+ypred.lasso01<-rep(0,nsim)
+ypred.lasso03<-rep(0,nsim)
+
+xtest<-c(1,rnorm(6))
+for (i in 1:nsim){
+  
+
+
+## x-variable
+x1<-rnorm(N)
+x2<-rnorm(N)
+x3<-rnorm(N)
+x4<-rnorm(N)
+x5<-rnorm(N)
+x6<-rnorm(N)
+
+## x-matrix, y-variabel og fuldt datasæt
+y<-beta[1]+beta[2]*x1+beta[3]*x2+beta[4]*x3+beta[5]*x4+beta[6]*x5+beta[7]*x6+rnorm(N)
+x<-model.matrix(y~x1+x2+x3+x4+x5+x6)[,-1]
+
+dataset<-cbind.data.frame(y,x1,x2,x3,x4,x5,x6)
+
+## lineær regression
+
+lin.model<-lm(y~x1+x2+x3+x4+x5+x6,data=dataset)
+lin.koeff<-as.vector(lin.model$coefficients)
+
+## ridge
+ridge.mod<-glmnet(x,y,alpha=0)
+ridge.koeff01<-predict(ridge.mod,type='coefficients',s=0.1)
+ridge.koeff03<-predict(ridge.mod,type='coefficients',s=0.3)
+
+## lasso
+
+lasso.mod<-glmnet(x,y,alpha=1)
+lasso.koeff01<-predict(lasso.mod,type='coefficients',s=0.1)
+lasso.koeff03<-predict(lasso.mod,type='coefficients',s=0.3)
+
+
+## beta3 og beta5 gemmes
+par.beta3[i,]<-c(lin.koeff[4],ridge.koeff01[4],ridge.koeff03[4],lasso.koeff01[4],lasso.koeff03[4])
+par.beta5[i,]<-c(lin.koeff[6],ridge.koeff01[6],ridge.koeff03[6],lasso.koeff01[6],lasso.koeff03[6])
+
+## prædiktion af y-værdi med de 5 sæt koefficienter
+ypred.linreg[i]<-sum(lin.koeff*xtest)
+ypred.ridge01[i]<-sum(ridge.koeff01*xtest)
+ypred.ridge03[i]<-sum(ridge.koeff03*xtest)
+ypred.lasso01[i]<-sum(lasso.koeff01*xtest)
+ypred.lasso03[i]<-sum(lasso.koeff03*xtest)
+
+}
+
+
+#### histogrammer, der viser estimater af beta3. Den sande værdi er 2
+par(mfrow=c(1,5))
+hist(par.beta3[,1],xlim=c(0.9,2.8),main='lin reg')
+hist(par.beta3[,2],xlim=c(0.9,2.8),main='ridge, lambda=0.1')
+hist(par.beta3[,3],xlim=c(0.9,2.8),main='ridge, lambda=0.3')
+hist(par.beta3[,4],xlim=c(0.9,2.8),main='lasso, lambda=0.1')
+hist(par.beta3[,5],xlim=c(0.9,2.8),main='lasso, lambda=0.3')
+
+#### histogrammer, der viser estimater af beta5. Den sande værdi er 0
+hist(par.beta5[,1],xlim=c(-0.8,0.8),main='lin reg')
+hist(par.beta5[,2],xlim=c(-0.8,0.8),main='ridge, lambda=0.1')
+hist(par.beta5[,3],xlim=c(-0.8,0.8),main='ridge, lambda=0.3')
+hist(par.beta5[,4],xlim=c(-0.8,0.8),main='lasso, lambda=0.1')
+hist(par.beta5[,5],xlim=c(-0.8,0.8),main='lasso, lambda=0.3')
+
+#### histogrammer, der viser prædiktioner af y. Den sande forventede værdi er indtegnet
+hist(ypred.linreg,main='lin reg')
+abline(v=sum(beta*xtest),col='red')
+hist(ypred.ridge01,main='ridge, lambda=0.1')
+abline(v=sum(beta*xtest),col='red')
+hist(ypred.ridge03,main='ridge, lambda=0.3')
+abline(v=sum(beta*xtest),col='red')
+hist(ypred.lasso01,main='lasso, lambda=0.1')
+abline(v=sum(beta*xtest),col='red')
+hist(ypred.lasso03,main='lasso, lambda=0.3')
+abline(v=sum(beta*xtest),col='red')
+
+#### gennemsnit og varianser af de prædikterede værdier
+sum(beta*xtest)  # sand forventet værdi
+mean(ypred.linreg); mean(ypred.ridge01); mean(ypred.ridge03); mean(ypred.lasso01); mean(ypred.lasso03)
+var(ypred.linreg); var(ypred.ridge01); var(ypred.ridge03); var(ypred.lasso01); var(ypred.lasso03)
+
+```
+
+Umiddelbart ser det ud til, at OLS er den der prædikterer, men har størst varians. Det er klart at for højere værdi af $\lambda$ desto mere straffer Ridge og Lasso $\beta_3$-koefficienten. Lasso og Ridge straffer den hårdere, da $\beta_3$ er en relativ stor koefficient. For $\beta_5$ prædikterer Ridge og Lasso bedre og for $\lambda = 0.3$ er Lasso klart den bedste med meget lille varians. Det skyldes at Lasso straffer små $\beta$ værdier meget hårdt. Og da $\beta_5=0$ virker det meget intutivt at den oftest estimeres til 0 i Lasso. Ridge prædikterer også bedre, men med større varians end Lasso. Eftersom Ridge kun konverger imod 0. Dog har både Lasso og Ridge lavere varians nu end OLS. 
+
+For de prædikterede værdier ses det at OLs har den største varians men er bedst til at prædiktere rigtig (grundet mindre bias). Hvor at Ridge og Lasso modellerne for $\lambda=0.3$ er dårligst til at prædiktere i gennemsnit. Til gengæld har de en lavere varians. Hvilket nok skylder, at de neglicerer nogle af $\beta$ koefficienterne, hvorfor de har højere bias og lavere varians. Alt i alt vil jeg nok foretrække en standard OLS model i det her tilfælde. Eftersom den prædikterer langt bedre i snit end de andre, uden at variansen virker meget højere. 
+
+
+
+
+
+
+
+

@@ -1,0 +1,85 @@
+---
+title: "Opgavesæt 4"
+output: html_document
+date: "2023-03-27"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Opgave 1 a), b) og c)
+
+Vi tager udgangspunkt i datasættet **biluheld.txt** for at prædiktere variablen *doed*. Nedenfor indlæsser vi data, standardiserer input-variablene og deler datasættet i et train/test-split med 30% i testdatasættet.
+
+
+```{r}
+library(keras)
+library(tensorflow)
+library(ggplot2)
+library(readr)
+install_tensorflow()
+
+
+# Indlæser data
+biluheld <- read_delim("biluheld.txt", delim = "\t", escape_double = FALSE, trim_ws = TRUE)
+
+### opdeling i input og output ###
+xBiluheld <- model.matrix(Doed~.,biluheld)[,-1]
+yBiluheld <- biluheld$Doed
+
+N <- length(yBiluheld)
+
+### normalisering af input  ###
+for (i in 1:ncol(xBiluheld)){
+  xBiluheld[,i] <- (xBiluheld[,i]-mean(xBiluheld[,i]))/sd(xBiluheld[,i])
+}
+
+
+### opdeling i træning og test ###
+set.seed(2023)
+train <- sample(1:N,floor(0.7*N))
+test <- (1:N)[-train]
+
+```
+
+
+### Opgave 1 d)
+
+Vi fitter nu et neuralt netværk (NN) med 1 hidden layer og 6 hidden units, hvor sigmoid-funktionen benyttes som activation function i output-laget. Jeg lader 20% af testdata blive benyttet til validring. 
+
+
+```{r}
+
+##### modelbygning og fit
+model <- keras_model_sequential() %>%
+  layer_dense(units = 6, activation = "sigmoid", input_shape = ncol(xBiluheld)) %>%
+  
+  compile(
+    loss = 'binary_crossentropy',
+    optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)    
+  )
+
+fit1 <- model %>%
+  fit(
+    x = xBiluheld[train,],
+    y = yBiluheld[train],
+    epochs = 400,
+    batch_size = 64,
+    validation_split = 0.2,
+    verbose = FALSE
+  )
+
+plot(fit1)
+summary(model)
+
+
+```
+
+
+
+
+
+
+
+

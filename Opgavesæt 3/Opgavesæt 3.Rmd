@@ -1,0 +1,64 @@
+---
+title: "Opgavesæt 3"
+output: html_document
+date: "2023-03-18"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+# Opgave 1
+
+## 1.1
+
+```{r}
+
+
+library(readr)
+library(locfit)
+library(splines)
+
+# Step 1: Load the dataset
+SAheart_data <- read_csv("SAheart.data.txt")
+
+# Step 2: Fit logistic regression with natural cubic splines for sbp predictor
+fit_sbp <- glm(chd ~ ns(sbp, 4), family = binomial, data = SAheart_data)
+
+# Plot the fitted curve on probability scale
+plot(SAheart_data$sbp, predict(fit_sbp, type = "response"), xlab = "sbp", ylab = "Probability of CHD")
+
+# Step 3: Use locfit() to estimate and draw a similar curve on the same plot
+fit_locfit <- locfit(chd ~ sbp, alpha = 0.3, data = SAheart_data, deg = 3)
+
+# Draw the locfit curve on the same plot
+lines(predict(fit_locfit), col = "red")
+
+# Step 4: Draw a pointwise confidence band for the locfit curve
+preplot(fit_locfit, xlab = "sbp", ylab = "Probability of CHD")
+lines(predict(fit_locfit, se = "pointwise", lwd = 2, add = TRUE), col = "blue")
+
+# Step 5: Adjust the bandwidth for locfit
+fit_locfit2 <- locfit(chd ~ sbp, alpha = 0.3, data = SAheart_data, deg = 3, nn = 300)
+
+# Draw the new locfit curve on the same plot
+lines(predict(fit_locfit2), type = "l", col = "green")
+
+
+
+
+```
+
+## 1.2
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,293 @@
+"0","install.packages(""keras"")"
+"2","WARNING: Rtools is required to build R packages but is not currently installed. Please download and install the appropriate version of Rtools before proceeding:
+
+https://cran.rstudio.com/bin/windows/Rtools/
+"
+"2","trying URL 'https://cran.rstudio.com/bin/windows/contrib/4.2/keras_2.11.1.zip'
+"
+"2","Content type 'application/zip'"
+"2"," length 3196133 bytes (3.0 MB)
+"
+"2","downloaded 3.0 MB
+
+"
+"1","package ‘keras’ successfully unpacked and MD5 sums checked
+"
+"1","
+"
+"1",""
+"1","The downloaded binary packages are in
+	C:\Users\User\AppData\Local\Temp\RtmpqI34LJ\downloaded_packages"
+"1",""
+"1","
+"
+"0","library(keras)"
+"0","install_keras(envname = ""r-reticulate"")"
+"1","Using virtual environment ""r-reticulate"" ...
+"
+"2","+ ""C:/Users/User/Documents/.virtualenvs/r-reticulate/Scripts/python.exe"" -m pip install --upgrade --no-user --ignore-installed ""tensorflow==2.11.*"" ""tensorflow-hub"" ""tensorflow-datasets"" ""scipy"" ""requests"" ""Pillow"" ""h5py"" ""pandas"" ""pydot""
+"
+"1","Collecting tensorflow==2.11.*
+"
+"1","  Using cached tensorflow-2.11.1-cp39-cp39-win_amd64.whl (1.9 kB)
+"
+"1","Collecting tensorflow-hub
+"
+"1","  Using cached tensorflow_hub-0.13.0-py2.py3-none-any.whl (100 kB)
+"
+"1","Collecting tensorflow-datasets
+"
+"1","  Using cached tensorflow_datasets-4.8.3-py3-none-any.whl (5.4 MB)
+"
+"1","Collecting scipy
+"
+"1","  Using cached scipy-1.10.1-cp39-cp39-win_amd64.whl (42.5 MB)
+"
+"1","Collecting requests
+"
+"1","  Using cached requests-2.28.2-py3-none-any.whl (62 kB)
+"
+"1","Collecting Pillow
+"
+"1","  Using cached Pillow-9.4.0-cp39-cp39-win_amd64.whl (2.5 MB)
+"
+"1","Collecting h5py
+"
+"1","  Using cached h5py-3.8.0-cp39-cp39-win_amd64.whl (2.6 MB)
+"
+"1","Collecting pandas
+"
+"1","  Using cached pandas-1.5.3-cp39-cp39-win_amd64.whl (10.9 MB)
+"
+"1","Collecting pydot
+"
+"1","  Using cached pydot-1.4.2-py2.py3-none-any.whl (21 kB)
+"
+"1","Collecting tensorflow-intel==2.11.1
+"
+"1","  Using cached tensorflow_intel-2.11.1-cp39-cp39-win_amd64.whl (266.3 MB)
+"
+"1","Collecting protobuf<3.20,>=3.9.2
+"
+"1","  Using cached protobuf-3.19.6-cp39-cp39-win_amd64.whl (895 kB)
+"
+"1","Collecting keras<2.12,>=2.11.0
+"
+"1","  Using cached keras-2.11.0-py2.py3-none-any.whl (1.7 MB)
+"
+"1","Collecting termcolor>=1.1.0
+"
+"1","  Using cached termcolor-2.2.0-py3-none-any.whl (6.6 kB)
+"
+"1","Collecting opt-einsum>=2.3.2
+"
+"1","  Using cached opt_einsum-3.3.0-py3-none-any.whl (65 kB)
+"
+"1","Collecting setuptools
+"
+"1","  Using cached setuptools-67.6.0-py3-none-any.whl (1.1 MB)
+"
+"1","Collecting tensorflow-estimator<2.12,>=2.11.0
+"
+"1","  Using cached tensorflow_estimator-2.11.0-py2.py3-none-any.whl (439 kB)
+"
+"1","Collecting gast<=0.4.0,>=0.2.1
+"
+"1","  Using cached gast-0.4.0-py3-none-any.whl (9.8 kB)
+"
+"1","Collecting numpy>=1.20
+"
+"1","  Using cached numpy-1.24.2-cp39-cp39-win_amd64.whl (14.9 MB)
+"
+"1","Collecting absl-py>=1.0.0
+"
+"1","  Using cached absl_py-1.4.0-py3-none-any.whl (126 kB)
+"
+"1","Collecting packaging
+"
+"1","  Using cached packaging-23.0-py3-none-any.whl (42 kB)
+"
+"1","Collecting flatbuffers>=2.0
+"
+"1","  Using cached flatbuffers-23.3.3-py2.py3-none-any.whl (26 kB)
+"
+"1","Collecting libclang>=13.0.0
+"
+"1","  Using cached libclang-16.0.0-py2.py3-none-win_amd64.whl (24.4 MB)
+"
+"1","Collecting google-pasta>=0.1.1
+"
+"1","  Using cached google_pasta-0.2.0-py3-none-any.whl (57 kB)
+"
+"1","Collecting tensorboard<2.12,>=2.11
+"
+"1","  Using cached tensorboard-2.11.2-py3-none-any.whl (6.0 MB)
+"
+"1","Collecting tensorflow-io-gcs-filesystem>=0.23.1
+"
+"1","  Using cached tensorflow_io_gcs_filesystem-0.31.0-cp39-cp39-win_amd64.whl (1.5 MB)
+"
+"1","Collecting grpcio<2.0,>=1.24.3
+"
+"1","  Using cached grpcio-1.51.3-cp39-cp39-win_amd64.whl (3.7 MB)
+"
+"1","Collecting typing-extensions>=3.6.6
+"
+"1","  Using cached typing_extensions-4.5.0-py3-none-any.whl (27 kB)
+"
+"1","Collecting six>=1.12.0
+"
+"1","  Using cached six-1.16.0-py2.py3-none-any.whl (11 kB)
+"
+"1","Collecting astunparse>=1.6.0
+"
+"1","  Using cached astunparse-1.6.3-py2.py3-none-any.whl (12 kB)
+"
+"1","Collecting wrapt>=1.11.0
+"
+"1","  Using cached wrapt-1.15.0-cp39-cp39-win_amd64.whl (36 kB)
+"
+"1","Collecting promise
+"
+"1","  Using cached promise-2.3-py3-none-any.whl
+"
+"1","Collecting tensorflow-metadata
+"
+"1","  Using cached tensorflow_metadata-1.12.0-py3-none-any.whl (52 kB)
+"
+"1","Collecting etils[enp,epath]>=0.9.0
+"
+"1","  Using cached etils-1.1.1-py3-none-any.whl (115 kB)
+"
+"1","Collecting tqdm
+"
+"1","  Using cached tqdm-4.65.0-py3-none-any.whl (77 kB)
+"
+"1","Collecting click
+"
+"1","  Using cached click-8.1.3-py3-none-any.whl (96 kB)
+"
+"1","Collecting toml
+"
+"1","  Using cached toml-0.10.2-py2.py3-none-any.whl (16 kB)
+"
+"1","Collecting psutil
+"
+"1","  Using cached psutil-5.9.4-cp36-abi3-win_amd64.whl (252 kB)
+"
+"1","Collecting dm-tree
+"
+"1","  Using cached dm_tree-0.1.8-cp39-cp39-win_amd64.whl (101 kB)
+"
+"1","Collecting urllib3<1.27,>=1.21.1
+"
+"1","  Using cached urllib3-1.26.15-py2.py3-none-any.whl (140 kB)
+"
+"1","Collecting certifi>=2017.4.17
+"
+"1","  Using cached certifi-2022.12.7-py3-none-any.whl (155 kB)
+"
+"1","Collecting idna<4,>=2.5
+"
+"1","  Using cached idna-3.4-py3-none-any.whl (61 kB)
+"
+"1","Collecting charset-normalizer<4,>=2
+"
+"1","  Using cached charset_normalizer-3.1.0-cp39-cp39-win_amd64.whl (97 kB)
+"
+"1","Collecting pytz>=2020.1
+"
+"1","  Using cached pytz-2023.2-py2.py3-none-any.whl (502 kB)
+"
+"1","Collecting python-dateutil>=2.8.1
+"
+"1","  Using cached python_dateutil-2.8.2-py2.py3-none-any.whl (247 kB)
+"
+"1","Collecting pyparsing>=2.1.4
+"
+"1","  Using cached pyparsing-3.0.9-py3-none-any.whl (98 kB)
+"
+"1","Collecting zipp
+"
+"1","  Using cached zipp-3.15.0-py3-none-any.whl (6.8 kB)
+"
+"1","Collecting importlib_resources
+"
+"1","  Using cached importlib_resources-5.12.0-py3-none-any.whl (36 kB)
+"
+"1","Collecting colorama
+"
+"1","  Using cached colorama-0.4.6-py2.py3-none-any.whl (25 kB)
+"
+"1","Collecting googleapis-common-protos<2,>=1.52.0
+"
+"1","  Using cached googleapis_common_protos-1.59.0-py2.py3-none-any.whl (223 kB)
+"
+"1","Collecting wheel<1.0,>=0.23.0
+"
+"1","  Using cached wheel-0.40.0-py3-none-any.whl (64 kB)
+"
+"1","Collecting tensorboard-plugin-wit>=1.6.0
+"
+"1","  Using cached tensorboard_plugin_wit-1.8.1-py3-none-any.whl (781 kB)
+"
+"1","Collecting google-auth-oauthlib<0.5,>=0.4.1
+"
+"1","  Using cached google_auth_oauthlib-0.4.6-py2.py3-none-any.whl (18 kB)
+"
+"1","Collecting google-auth<3,>=1.6.3
+"
+"1","  Using cached google_auth-2.16.3-py2.py3-none-any.whl (177 kB)
+"
+"1","Collecting tensorboard-data-server<0.7.0,>=0.6.0
+"
+"1","  Using cached tensorboard_data_server-0.6.1-py3-none-any.whl (2.4 kB)
+"
+"1","Collecting werkzeug>=1.0.1
+"
+"1","  Using cached Werkzeug-2.2.3-py3-none-any.whl (233 kB)
+"
+"1","Collecting markdown>=2.6.8
+"
+"1","  Using cached Markdown-3.4.3-py3-none-any.whl (93 kB)
+"
+"1","Collecting pyasn1-modules>=0.2.1
+"
+"1","  Using cached pyasn1_modules-0.2.8-py2.py3-none-any.whl (155 kB)
+"
+"1","Collecting cachetools<6.0,>=2.0.0
+"
+"1","  Using cached cachetools-5.3.0-py3-none-any.whl (9.3 kB)
+"
+"1","Collecting rsa<5,>=3.1.4
+"
+"1","  Using cached rsa-4.9-py3-none-any.whl (34 kB)
+"
+"1","Collecting requests-oauthlib>=0.7.0
+"
+"1","  Using cached requests_oauthlib-1.3.1-py2.py3-none-any.whl (23 kB)
+"
+"1","Collecting importlib-metadata>=4.4
+"
+"1","  Using cached importlib_metadata-6.1.0-py3-none-any.whl (21 kB)
+"
+"1","Collecting MarkupSafe>=2.1.1
+"
+"1","  Using cached MarkupSafe-2.1.2-cp39-cp39-win_amd64.whl (16 kB)
+"
+"1","Collecting pyasn1<0.5.0,>=0.4.6
+"
+"1","  Using cached pyasn1-0.4.8-py2.py3-none-any.whl (77 kB)
+"
+"1","Collecting oauthlib>=3.0.0
+"
+"1","  Using cached oauthlib-3.2.2-py3-none-any.whl (151 kB)
+"
+"1","Installing collected packages: tensorboard-plugin-wit, pytz, pyasn1, libclang, flatbuffers, dm-tree, zipp, wrapt, wheel, urllib3, typing-extensions, toml, termcolor, tensorflow-io-gcs-filesystem, tensorflow-estimator, tensorboard-data-server, six, setuptools, rsa, pyparsing, pyasn1-modules, psutil, protobuf, Pillow, packaging, oauthlib, numpy, MarkupSafe, keras, idna, grpcio, gast, etils, colorama, charset-normalizer, certifi, cachetools, absl-py, werkzeug, tqdm, tensorflow-hub, scipy, requests, python-dateutil, pydot, promise, opt-einsum, importlib_resources, importlib-metadata, h5py, googleapis-common-protos, google-pasta, google-auth, click, astunparse, tensorflow-metadata, requests-oauthlib, pandas, markdown, tensorflow-datasets, google-auth-oauthlib, tensorboard, tensorflow-intel, tensorflow
+"
+"1","Successfully installed MarkupSafe-2.1.2 Pillow-9.4.0 absl-py-1.4.0 astunparse-1.6.3 cachetools-5.3.0 certifi-2022.12.7 charset-normalizer-3.1.0 click-8.1.3 colorama-0.4.6 dm-tree-0.1.8 etils-1.1.1 flatbuffers-23.3.3 gast-0.4.0 google-auth-2.16.3 google-auth-oauthlib-0.4.6 google-pasta-0.2.0 googleapis-common-protos-1.59.0 grpcio-1.51.3 h5py-3.8.0 idna-3.4 importlib-metadata-6.1.0 importlib_resources-5.12.0 keras-2.11.0 libclang-16.0.0 markdown-3.4.3 numpy-1.24.2 oauthlib-3.2.2 opt-einsum-3.3.0 packaging-23.0 pandas-1.5.3 promise-2.3 protobuf-3.19.6 psutil-5.9.4 pyasn1-0.4.8 pyasn1-modules-0.2.8 pydot-1.4.2 pyparsing-3.0.9 python-dateutil-2.8.2 pytz-2023.2 requests-2.28.2 requests-oauthlib-1.3.1 rsa-4.9 scipy-1.10.1 setuptools-67.6.0 six-1.16.0 tensorboard-2.11.2 tensorboard-data-server-0.6.1 tensorboard-plugin-wit-1.8.1 tensorflow-2.11.1 tensorflow-datasets-4.8.3 tensorflow-estimator-2.11.0 tensorflow-hub-0.13.0 tensorflow-intel-2.11.1 tensorflow-io-gcs-filesystem-0.31.0 tensorflow-metadata-1.12.0 termcolor-2.2.0 toml-0.10.2 tqdm-4.65.0 typing-extensions-4.5.0 urllib3-1.26.15 werkzeug-2.2.3 wheel-0.40.0 wrapt-1.15.0 zipp-3.15.0
+"
+"1","
+Installation complete.
+
+"

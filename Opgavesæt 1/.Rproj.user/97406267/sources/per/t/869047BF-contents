@@ -1,0 +1,275 @@
+library(pROC)
+library(glmnet)
+library(MASS)
+library(mvtnorm)
+
+
+## Indlæs data
+titanic <- read.delim("C:/Users/aro.fi/Dropbox (CBS)/CBS/Predictive modeling 23/R/titanic.txt")
+titanic$Klasse<-as.factor(titanic$Klasse)
+
+
+View(titanic)
+
+titanic.s<-titanic[,c(1,4,5,6,7)]
+View(titanic.s)
+
+### opdeling i træning og test
+
+N<-length(titanic.s$Overlevelse)
+set.seed(12345)
+RNGkind(sample.kind='Rejection')  ## dette er næppe nødvendigt
+test<-sample(1:N,N/2)
+train<-(1:N)[-test]
+
+titanic.s.test<-titanic.s[test,]
+titanic.test<-titanic[test,]
+
+#####################################
+##### Logistisk regression
+#####################################
+
+
+### lille datasæt
+
+overlevelse.test<-titanic.s[test,]$Overlevelse
+
+fit.logistic<-glm(Overlevelse~.,data=titanic.s[train,],family='binomial')
+fit.logistic$coefficients
+summary(fit.logistic)
+
+
+pred.prob<-predict(fit.logistic,titanic.s[test,],type='response')
+pred.value<-1*(pred.prob>0.5)
+table(pred.value,overlevelse.test)
+
+
+## bare til pynt:
+titanic.s.test$pred.prob<-pred.prob  
+titanic.s.test$pred.value<-pred.value
+View(titanic.s.test)
+
+mean(pred.value!=overlevelse.test)
+
+
+
+########### andre tærskelværdier 
+
+
+pred.value<-1*(pred.prob>0.3)
+table(pred.value,overlevelse.test)
+
+pred.value<-1*(pred.prob>0.7)
+table(pred.value,overlevelse.test)
+
+
+###### ROC og AUC 
+
+plot(roc(overlevelse.test~pred.prob,direction='<'))
+auc(overlevelse.test~pred.prob,direction='<')
+
+
+
+
+### stort datasæt
+
+
+fit.logistic<-glm(Overlevelse~.,data=titanic[train,],family='binomial')
+summary(fit.logistic)
+
+pred.prob<-predict(fit.logistic,titanic[test,],type='response')
+pred.value<-1*(pred.prob>0.5)
+table(pred.value,overlevelse.test)
+
+mean(pred.value!=overlevelse.test)
+
+
+plot(roc(overlevelse.test~pred.prob,direction='<'))
+auc(overlevelse.test~pred.prob,direction='<')
+
+
+## igen til pynt:
+titanic.test$pred.prob.ny<-pred.prob  
+titanic.test$pred.value.ny<-pred.value
+View(titanic.test)
+
+
+
+
+#########################################
+##### regulariseret logistisk regression
+###########################################
+### ridge
+
+x<-model.matrix(Overlevelse~.,titanic)[,-1]
+y<-titanic$Overlevelse
+
+ridge.mod<-glmnet(x[train,],y[train],alpha=0,family = 'binomial')
+plot(ridge.mod,label=TRUE,xvar='lambda')
+
+cv.ridge.train<-cv.glmnet(x[train,],y[train],alpha=0,family='binomial',type.measure ='auc')
+plot(cv.ridge.train)
+best.lambda<-cv.ridge.train$lambda.min
+best.lambda
+ridge.mod.final<-glmnet(x[train,],y[train],alpha=0)
+predict(ridge.mod.final,type='coefficients',s=best.lambda)
+
+# ovenfor optimeres mht auc i testdatasættet. Hvis man ønsker optimering mht fejlrate, skal der skrives 'class' i stedet
+
+pred.prob.ridge<-as.vector(predict(ridge.mod.final,s=best.lambda,newx=x[test,]))
+pred.value.ridge<-1*(pred.prob.ridge>0.5)
+
+plot(roc(overlevelse.test~pred.prob.ridge,direction='<'))
+auc(overlevelse.test~pred.prob.ridge,direction='<')
+mean(pred.value.ridge!=overlevelse.test)
+
+
+### lasso
+
+lasso.mod<-glmnet(x[train,],y[train],alpha=1,family = 'binomial')
+plot(lasso.mod,label=TRUE,xvar='lambda')
+
+cv.lasso.train<-cv.glmnet(x[train,],y[train],alpha=1,family='binomial',type.measure = 'auc')
+plot(cv.lasso.train)
+best.lambda<-cv.lasso.train$lambda.min
+best.lambda
+
+
+lasso.mod.final<-glmnet(x[train,],y[train],alpha=1)
+predict(lasso.mod.final,type='coefficients',s=best.lambda)
+
+
+pred.prob.lasso<-as.vector(predict(lasso.mod.final,s=best.lambda,newx=x[test,]))
+pred.value.lasso<-1*(pred.prob.lasso>0.5)
+
+plot(roc(overlevelse.test~pred.prob.lasso,direction='<'))
+auc(overlevelse.test~pred.prob.lasso,direction='<')
+mean(pred.value.lasso!=overlevelse.test)
+
+###########################
+#### LDA
+###########################
+
+##### eksempel med p=1 og K=2
+N<-1000
+pi0<-0.55
+pi1<-0.45
+mu0<-0
+mu1<-2
+sigma<-1
+X<-rep(0,N)
+
+G<-sample(0:1,N,replace=TRUE,prob=c(pi0,pi1))
+X[G==0]<-rnorm(sum(G==0),mean=0, sd=1)
+X[G==1]<-rnorm(sum(G==1),mean=2, sd=1)
+
+hist(X[G==0],col=rgb(1,0,0,0.5),xlim=c(-3,6),main='',xlab='X',ylab='antal')
+hist(X[G==1],col=rgb(0,0,1,0.5),add=TRUE)
+
+
+### det næste er til at finde x-grænsen, som opdeler de to klasser
+
+minifit<-lm(X~G)
+sigma2<-(summary(minifit)$sigma)^2
+
+pi0.hat<-mean(G==0)
+pi1.hat<-mean(G==1)
+
+mu0.hat<-mean(X[G==0])
+mu1.hat<-mean(X[G==1])
+
+pi0.hat; pi1.hat; mu0.hat; mu1.hat; sigma2
+
+xlimit<-(mu1.hat+mu0.hat)/2-sigma2*log(pi1.hat/pi0.hat)/(mu1.hat-mu0.hat)
+xlimit
+abline(v=xlimit,lwd=2)
+
+
+##### Eksempel med p=2 og K=3
+N<-2010
+pi0<-0.3
+pi1<-0.5
+pi2<-0.2
+
+G<-sample(0:2,N,replace=TRUE,prob=c(pi0,pi1,pi2))
+X<-matrix(rep(0,N*2),ncol=2)
+
+X[G==0,]<-rmvnorm(sum(G==0),mean=c(3,3),sigma=matrix(c(1,0.7,0.7,1.2),ncol=2))
+X[G==1,]<-rmvnorm(sum(G==1),mean=c(-2,-2),sigma=matrix(c(1,0.7,0.7,1.2),ncol=2))
+X[G==2,]<-rmvnorm(sum(G==2),mean=c(2,-1),sigma=matrix(c(1,0.7,0.7,1.2),ncol=2))
+
+plot(X[G==0,],col='orange',xlab='X1',ylab='X2',xlim=c(min(X[,1]),max(X[,1])),ylim=c(min(X[,2]),max(X[,2])))
+points(X[G==1,],col='blue')
+points(X[G==2,],col='darkgreen')
+
+
+########## LDA  - simuleret datasæt
+simdata<-cbind(G,X)
+simdata<-data.frame(simdata)
+names(simdata)<-c('G','X1','X2')
+
+traindata<-simdata[1:2000,]
+testdata<-simdata[2001:2010,]
+
+
+fit.lda<-lda(G~X1+X2,data=traindata)
+pred.lda<-predict(fit.lda,testdata)
+cbind(testdata,pred.lda$posterior,pred.lda$class)
+points(X[2001:2010,],cex=2)
+
+###### dataanalyse med LDA - lille datasæt
+
+
+
+
+fit.lda<-lda(Overlevelse~.,data=titanic.s[train,])
+fit.lda
+pred.lda<-predict(fit.lda,titanic.s[test,])
+pred.value.lda<-pred.lda$class
+pred.prob.lda<-pred.lda$posterior[,2]
+mean(pred.value.lda!=overlevelse.test)
+table(pred.value.lda,overlevelse.test)
+
+plot(roc(overlevelse.test~pred.prob.lda,direction='<'))
+auc(overlevelse.test~pred.prob.lda,direction='<')
+
+
+fit.qda<-qda(Overlevelse~.,data=titanic.s[train,])
+fit.qda
+pred.qda<-predict(fit.qda,titanic.s[test,])
+pred.value.qda<-pred.qda$class
+pred.prob.qda<-pred.qda$posterior[,2]
+mean(pred.value.qda!=overlevelse.test)
+table(pred.value.qda,overlevelse.test)
+
+plot(roc(overlevelse.test~pred.prob.qda,direction='<'))
+auc(overlevelse.test~pred.prob.qda,direction='<')
+
+
+
+### stort datasæt
+
+fit.lda<-lda(Overlevelse~.,data=titanic[train,])
+fit.lda
+pred.lda<-predict(fit.lda,titanic[test,])
+pred.value.lda<-pred.lda$class
+pred.prob.lda<-pred.lda$posterior[,2]
+mean(pred.value.lda!=overlevelse.test)
+table(pred.value.lda,overlevelse.test)
+
+plot(roc(overlevelse.test~pred.prob.lda,direction='<'))
+auc(overlevelse.test~pred.prob.lda,direction='<')
+
+
+
+fit.qda<-qda(Overlevelse~.,data=titanic[train,])
+fit.qda
+pred.qda<-predict(fit.qda,titanic[test,])
+pred.value.qda<-pred.qda$class
+pred.prob.qda<-pred.qda$posterior[,2]
+mean(pred.value.qda!=overlevelse.test)
+table(pred.value.qda,overlevelse.test)
+
+plot(roc(overlevelse.test~pred.prob.qda,direction='<'))
+auc(overlevelse.test~pred.prob.qda,direction='<')
+

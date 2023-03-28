@@ -1,0 +1,60 @@
+---
+title: "Opgavesæt 2"
+output: html_document
+date: "2023-03-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Opgave 1.1
+
+```{r}
+
+library(readr)
+
+
+SAheart_data_1_ <- read_csv("SAheart.data (1).txt", 
+    col_types = cols(famhist = col_factor(levels = c("Present", 
+        "Absent")), chd = col_factor(levels = c("0", 
+        "1"))))
+
+
+
+
+```
+
+
+# Opgave 1.2
+
+```{r}
+
+library(splines)
+
+
+# Fit logistic regression with natural cubic splines and 4 knots
+model <- glm(chd ~ ns(sbp, df = 4) + ns(tobacco, df = 4) + ns(ldl, df = 4) +
+                ns(obesity, df = 4) + ns(age, df = 4),
+             data = SAheart_data_1_, family = binomial())
+
+# Print summary of the model
+summary(model)
+
+
+```
+
+# Opgave 1.3
+
+```{r}
+
+# Plot predictors
+par(mfrow = c(2, 3))
+plot(ns(SAheart_data_1_$sbp, df = 4), main = "sbp")
+plot(ns(SAheart_data_1_$tobacco, df = 4), main = "tobacco")
+plot(ns(SAheart_data_1_$ldl, df = 4), main = "ldl")
+plot(ns(SAheart_data_1_$obesity, df = 4), main = "obesity")
+plot(ns(SAheart_data_1_$age, df = 4), main = "age")
+
+```
+

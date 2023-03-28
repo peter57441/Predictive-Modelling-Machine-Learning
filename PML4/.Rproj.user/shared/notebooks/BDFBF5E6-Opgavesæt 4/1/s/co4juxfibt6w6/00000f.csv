@@ -1,0 +1,8 @@
+"0","library(keras)"
+"0","library(tensorflow)"
+"0","library(ggplot2)"
+"0","library(readr)"
+"0","install_tensorflow()"
+"2","Error in install_tensorflow() : 
+  You should call install_tensorflow()/install_keras() only in a fresh R session that has not yet initialized Keras and TensorFlow (this is to avoid DLL in use errors during installation)
+"

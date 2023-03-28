@@ -1,0 +1,6 @@
+"0",""
+"0","# Step 3: Use locfit() to estimate and draw a similar curve on the same plot"
+"0","fit_locfit <- locfit(chd ~ sbp, alpha = 0.3, data = SAheart_data, deg = 3)"
+"0",""
+"0","# Draw the locfit curve on the same plot"
+"0","lines(predict(fit_locfit), col = ""red"")"

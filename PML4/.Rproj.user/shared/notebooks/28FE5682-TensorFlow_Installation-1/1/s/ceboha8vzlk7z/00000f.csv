@@ -1,0 +1,9 @@
+"0","library(reticulate)"
+"0","path_to_python <- install_python()"
+"2","+ ""C:/Users/User/AppData/Local/r-reticulate/r-reticulate/pyenv/pyenv-win/bin/pyenv"" install 3.9.13
+"
+"1",":: [Info] ::  Mirror: https://www.python.org/ftp/python
+"
+"0","virtualenv_create(""r-reticulate"", python = path_to_python) #manage Python virtual environments"
+"1","virtualenv: r-reticulate
+"

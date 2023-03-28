@@ -1,0 +1,27 @@
+"0",""
+"0","##### modelbygning og fit"
+"0","model <- keras_model_sequential() %>%"
+"0","  layer_dense(units = 6, activation = ""sigmoid"", input_shape = ncol(xBiluheld)) %>%"
+"0","  "
+"0","  compile("
+"0","    loss = 'binary_crossentropy',"
+"0","    optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)    "
+"0","  )"
+"2","Error: Valid installation of TensorFlow not found.
+
+Python environments searched for 'tensorflow' package:
+ C:\Users\User\AppData\Local\Programs\Python\Python38\python.exe
+
+Python exception encountered:
+ Traceback (most recent call last):
+  File ""C:\Program Files\R\R-4.2.3\library\reticulate\python\rpytools\loader.py"", line 119, in _find_and_load_hook
+    return _run_hook(name, _hook)
+  File ""C:\Program Files\R\R-4.2.3\library\reticulate\python\rpytools\loader.py"", line 93, in _run_hook
+    module = hook()
+  File ""C:\Program Files\R\R-4.2.3\library\reticulate\python\rpytools\loader.py"", line 117, in _hook
+    return _find_and_load(name, import_)
+ModuleNotFoundError: No module named 'tensorflow'
+
+
+You can install TensorFlow using the install_tensorflow() function.
+"

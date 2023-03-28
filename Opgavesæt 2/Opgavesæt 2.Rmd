@@ -1,0 +1,294 @@
+---
+title: "Opgavesæt 2"
+output: html_document
+date: "2023-03-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Opgave 1
+
+## Opgave 1.1
+
+Indlæs datasættet til en dataframe med fx read.csv. Lav et summary og check at
+det ser OK ud. (Kik evt i scriptet til forelæsningen i uge 4, hvis det driller.)
+
+```{r}
+
+library(readr)
+
+
+SAheart_data <- read_csv("SAheart.data.txt", 
+    col_types = cols(famhist = col_factor(levels = c("Present", 
+        "Absent")), chd = col_factor(levels = c("0", 
+        "1"))))
+
+
+
+
+```
+
+
+## Opgave 1.2
+
+Fit en logistisk regression med naturlige kubiske splines for de prædiktorer der
+benyttes i bogens Figure5.4 (undtagen famhist).
+
+```{r}
+
+library(splines)
+
+
+# Fit logistic regression with natural cubic splines and 4 knots
+model <- glm(chd ~ ns(sbp, df = 4) + ns(tobacco, df = 4) + ns(ldl, df = 4) +
+                ns(obesity, df = 4) + ns(age, df = 4),
+             data = SAheart_data, family = binomial())
+
+# Print summary of the model
+summary(model)
+
+
+```
+
+## Opgave 1.3 & 1.4
+
+Tegn de fittede kurver svarende til hver prædiktor for (passende valgte) fastholdte
+værdier at de øvrige prædiktorer. Da jeg bruger `visreg` bliver standardfejl allerede indregnet fra start.
+
+```{r}
+
+# Load the visreg package
+library(visreg)
+
+# Plot the fitted curves for each predictor while holding the other predictors constant
+par(mfrow = c(2, 3))
+visreg(model, "sbp", ylim = c(-3, 6))
+visreg(model, "tobacco", ylim = c(-3, 9))
+visreg(model, "ldl", ylim = c(-5, 5))
+visreg(model, "obesity", ylim = c(-3, 7))
+visreg(model, "age", ylim = c(-6, 2))
+
+
+
+```
+
+## Opgave 1.5
+
+Udfør tests for om prædiktorerne kan droppes fra modeller og se om I kan reproducere
+Table 5.1. Forsøg evt. også test for linearitet, som i scriptet fra forelæsningen.
+
+# Opgave 2
+
+## Opgave 2.1
+
+Indlæs datasættet til en dataframe og lav lidt præprocessering så vi får samlet de
+mange frekvenser i en matrix og fjernet andre lyde end „aa“ og „ao“. 
+
+```{r}
+
+# Load the splines package
+library(splines)
+
+# Fit the model
+phoneme <- read.csv("./phoneme.data.txt")
+phoneme <- subset(phoneme, g=="aa" | g=="ao")
+ph2 <- data.frame(X=I(as.matrix(phoneme[,2:257])),
+                  g= factor(phoneme$g,levels=c("aa","ao")))
+fit256 <- glm(g~X, family = binomial, data=ph2)
+
+```
+
+
+## Opgave 2.2.
+
+```{r}
+
+
+plot(coef(fit256)[-1], type="o")
+
+
+
+```
+
+## Opgave 2.3-5
+
+```{r}
+
+
+# Step 4: Fit the model with natural spline parametrization
+ns12 <- ns(1:256, df=12)
+X_ns12 <- as.matrix(phoneme[,2:257]) %*% ns12
+fit12 <- glm(g ~ X_ns12, family=binomial, data=ph2)
+
+# Step 5: Plot the fitted spline curve of coefficients
+par(mfrow=c(1,1))
+plot(coef(fit12)[-1], type="l", col="blue", ylim=c(-3,3), main="Fitted Spline Curve of Coefficients")
+
+
+
+
+```
+
+
+## Opgave 2.6
+
+
+```{r}
+
+# Calculate AIC for the model with 256 predictors
+AIC(fit256)
+
+
+# Calculate AIC for the model with 12 spline basis functions
+AIC(fit12)
+
+
+
+```
+Vi kan se, at modellen med 12 spline-basisfunktioner har en meget lavere AIC end modellen med 256 prædiktorer. Dette tyder på, at modellen med 12 spline-basisfunktioner passer bedre til dataene.
+
+Vi kan også tilpasse modeller med mere end 12 spline-basisfunktioner for at se, hvordan AIC ændres med flere parametre:
+
+
+```{r}
+
+
+# Fit model with 20 spline basis functions
+ns20 <- ns(1:256, df=20)
+X_ns20 <- as.matrix(phoneme[,2:257]) %*% ns20
+fit20 <- glm(g ~ X_ns20, family=binomial, data=ph2)
+AIC(fit20)
+
+
+# Fit model with 30 spline basis functions
+ns30 <- ns(1:256, df=30)
+X_ns30 <- as.matrix(phoneme[,2:257]) %*% ns30
+fit30 <- glm(g ~ X_ns30, family=binomial, data=ph2)
+AIC(fit30)
+
+
+
+```
+Som vi kan se, fortsætter AIC med at falde, efterhånden som vi øger antallet af basisfunktioner, men det er vigtigt at huske på, at tilføjelse af for mange parametre kan føre til overfitting og dårlig ydeevne på nye data.
+
+Går vi videre til trin 7, vil vi opdele dataene i et træningssæt og et testsæt for at evaluere modellens ydeevne på nye data.
+
+```{r}
+
+
+N <-nrow(ph2)
+train <- sample(1:N, 1000)
+test <- setdiff(1:N, train)
+fit12tr <- glm(g~X %*% ns12, family = binomial, data=ph2, subset=train)
+predtst <- predict(fit12tr, newdata=ph2[test,]) >.5
+table(predtst, ph2$g[test])
+
+
+```
+
+
+
+
+
+
+# Opgave 3
+
+## Opgave 3.1 og 3.2
+
+```{r}
+
+
+library(ISwR)
+library(splines)
+
+
+juul_female <- subset(juul, sex==2 & !is.na(igf1) & age>6 & age <20)
+juul_female_sqrtigf1 <- sqrt(juul_female$igf1)
+juul_female_age <- juul_female$age
+fit <- smooth.spline(juul_female_age, juul_female_sqrtigf1)
+plot(juul_female_age, juul_female_sqrtigf1, main = "Smoothing spline for girls' sqrt(igf1)",
+     xlab = "Age", ylab = "sqrt(igf1)", ylim = c(0, 40))
+lines(fit, col = "red")
+
+
+
+```
+
+
+## Opgave 3.3
+
+```{r}
+
+# Subset data and calculate square root of igf1
+
+juul_male <- subset(juul, sex==1 & !is.na(igf1) & age>6 & age <20)
+juul_male_sqrtigf1 <- sqrt(juul_male$igf1)
+juul_male_age <- juul_male$age
+
+# Fit smoothing splines and calculate residuals
+fit_female <- smooth.spline(juul_female_age, juul_female_sqrtigf1)
+fit_male <- smooth.spline(juul_male_age, juul_male_sqrtigf1)
+
+juul_female_residuals <- resid(fit_female)
+juul_male_residuals <- resid(fit_male)
+
+# Fit splines to squared residuals and calculate standard deviations
+juul_female_residuals_spline <- smooth.spline(juul_female_age, juul_female_residuals^2)
+juul_female_sd <- sqrt(juul_female_residuals_spline$y)
+
+juul_male_residuals_spline <- smooth.spline(juul_male_age, juul_male_residuals^2)
+juul_male_sd <- sqrt(juul_male_residuals_spline$y)
+
+# Calculate confidence intervals
+juul_female_upper_ci_1SD <- fit_female$y + 1 * juul_female_sd
+juul_female_lower_ci_1SD <- fit_female$y - 1 * juul_female_sd
+juul_female_upper_ci_2SD <- fit_female$y + 2 * juul_female_sd
+juul_female_lower_ci_2SD <- fit_female$y - 2 * juul_female_sd
+
+juul_male_upper_ci_1SD <- fit_male$y + 1 * juul_male_sd
+juul_male_lower_ci_1SD <- fit_male$y - 1 * juul_male_sd
+juul_male_upper_ci_2SD <- fit_male$y + 2 * juul_male_sd
+juul_male_lower_ci_2SD <- fit_male$y - 2 * juul_male_sd
+
+# Plotting
+par(mfrow = c(1, 2), mar = c(5, 5, 4, 2) + 0.1)
+
+# Girls plot
+plot(juul_female_age, juul_female_sqrtigf1, main = "Smoothing spline for girls' sqrt(igf1)",
+     xlab = "Age", ylab = "sqrt(igf1)", ylim = c(0, 40))
+
+lines(fit_female, col = "red")
+
+lines(fit_female$x, juul_female_upper_ci_1SD, lty = 2, col = "blue")
+lines(fit_female$x, juul_female_lower_ci_1SD, lty = 2, col = "blue")
+lines(fit_female$x, juul_female_upper_ci_2SD, lty = 1, col = "blue")
+lines(fit_female$x, juul_female_lower_ci_2SD, lty = 1, col = "blue")
+
+# Boys plot
+plot(juul_male_age, juul_male_sqrtigf1, main = "Smoothing spline for boys' sqrt(igf1)",
+     xlab = "Age", ylab = "sqrt(igf1)", ylim = c(0, 40))
+
+lines(fit_male, col = "red")
+
+lines(fit_male$x, juul_male_upper_ci_1SD, lty = 2, col = "blue")
+lines(fit_male$x, juul_male_lower_ci_1SD, lty = 2, col = "blue")
+lines(fit_male$x, juul_male_upper_ci_2SD, lty = 1, col = "blue")
+lines(fit_male$x, juul_male_lower_ci_2SD, lty = 1, col = "blue")
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
