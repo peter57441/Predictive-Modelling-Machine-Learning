@@ -1,0 +1,297 @@
+---
+title: "PML 8"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-05-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Opgave 1
+
+Vi kigger på *phoneme* datasættet og vil så på hvordan xgboost og glmnet virker.
+
+
+## 1)
+
+Jeg indlæsser datasættet.
+
+
+```{r}
+
+# Indlæs datasættet
+phoneme <- read.csv("phoneme.data.txt")
+
+# Subset kun de rækker, hvor g er "aa" eller "ao"
+phoneme <- subset(phoneme, g=="aa" | g=="ao")
+
+# Opret ph2 data frame med de ønskede kolonner
+ph2 <- data.frame(X = I(as.matrix(phoneme[, 2:257])),
+                  g = factor(phoneme$g, levels = c("aa", "ao")))
+
+# Definer antallet af rækker som N
+N <- nrow(ph2)
+
+# Opret træningssæt og testsæt
+train <- sample(1:N, 1000)
+test <- setdiff(1:N, train)
+
+
+```
+
+
+## 2)
+
+Vi vil nu kigge på xgboost.
+
+```{r}
+
+library(xgboost)
+
+ph2.test <- ph2[test, ]
+ph2.train <- ph2[train, ]
+y_train <- as.numeric(ph2.train$g) - 1  # Konverter faktoren til 0/1 variabel
+bst <- xgboost(data = as.matrix(ph2.train$X), label = y_train,
+               max.depth = 2, eta = 2, nthread = 2,
+               nrounds = 100, objective = "binary:logistic")
+
+
+```
+
+Koden gør følgende:
+
+data: Inputdataen, der forventes som en matrix. Vi bruger as.matrix(ph2.train$X) til at konvertere dataen til en matrix.
+
+label: Vektor af målværdierne. Vi bruger y_train, som er den konverterede 0/1-variabel baseret på ph2.train$g.
+
+max.depth: Maksimal dybde af hver træ-node. I dette tilfælde er den sat til 2.
+
+eta: Læringshastigheden (også kendt som "learning rate"). Den styrer, hvor hurtigt modellen tilpasser sig dataene.
+
+nthread: Antal tråde til at køre xgboost-træningen. Dette kan indstilles baseret på dine systemressourcer.
+
+nrounds: Antal træningsrunder (også kendt som "boosting iterations"). Jo højere værdi, desto flere træningsrunder udføres, hvilket kan forbedre præstationen. Du kan øge denne værdi til f.eks. 100 eller mere.
+
+objective: Den objektive funktion, der bruges under træningen. I dette tilfælde bruger vi "binary:logistic" for binær logistisk regression.
+
+Det anbefales at justere nrounds-parameteren til en højere værdi (f.eks. 100 eller mere), da 2 runder sandsynligvis ikke vil være tilstrækkeligt til at opnå gode resultater.
+
+
+## 3)
+
+```{r}
+
+# Foretag forudsigelser på testsættet
+xgb_pred <- predict(bst, as.matrix(ph2.test$X))
+
+# Konverter sandsynligheder til klasseetiketter (0 eller 1)
+xgb_pred_labels <- ifelse(xgb_pred > 0.5, 1, 0)
+
+# Opret forvirringsmatrix
+confusion_matrix <- table(xgb_pred_labels, ph2.test$g)
+
+# Vis forvirringsmatrix
+confusion_matrix
+
+
+```
+
+I dette eksempel antages det, at en sandsynlighed større end 0,5 betyder klasse 1, og en sandsynlighed mindre end eller lig med 0,5 betyder klasse 0. Vi kan justere tærskelværdien efter behov.
+
+Når forvirringsmatricen er oprettet, kan vi analysere resultaterne og evaluere modellens præstation. For eksempel kan vi beregne nøjagtighed, præcision, recall osv. baseret på forvirringsmatricen.
+
+Vi kan eksperimentere med forskellige parametre i xgboost-kaldet for at se, hvordan de påvirker modellens præstation. Specielt kan eta-parameteren (læringshastigheden) have en stor indflydelse. En høj eta-værdi kan føre til hurtigere indlæring, men det kan også øge risikoen for overfit. 
+
+## 4)
+
+Vi vil nu se på glmnet.
+
+```{r}
+
+library(glmnet)
+
+gnet <- glmnet(ph2.train$X, ph2.train$g, family = "binomial")
+plot(gnet)
+
+
+```
+
+Grafen har lambda-værdien (logaritmisk skala) på x-aksen og koefficientværdierne på y-aksen. Hver linje i grafen repræsenterer en variabel og dens koefficientværdi som funktion af lambda.
+
+Regularisering er en metode til at kontrollere modellens kompleksitet og undgå overfitting ved at tilføje en "straf" til koefficienterne. I glmnet bruger man en form for regularisering kaldet Lasso-penalty, hvilket betyder, at lambda-værdien styrer graden af straf (regularisering) på koefficienterne. Jo højere lambda-værdi, desto mere straf på koefficienterne, hvilket fører til en mere restriktiv model.
+
+Grafen viser, hvordan koefficienterne for hver variabel ændrer sig, når lambda-værdien ændrer sig. Vi kan observere, hvilke variabler der har nonzero koefficienter ved forskellige lambda-værdier og dermed få en idé om, hvilke variabler der har størst indflydelse på modellen. Grafen kan også hjælpe med at identificere en passende værdi for lambda, der balancerer modelens præcision og kompleksitet.
+
+## 5)
+
+Vi laver nu CV:
+
+```{r}
+
+CV1 <- cv.glmnet(ph2.train$X, ph2.train$g, family = "binomial")
+plot(CV1)
+
+
+```
+
+## 6)
+
+Vi laver igen CV, men for $\alpha=0$ og $\alpha=0.5$:
+
+```{r}
+
+CV_alpha0 <- cv.glmnet(ph2.train$X, ph2.train$g, family = "binomial", alpha = 0)
+CV_alpha0.5 <- cv.glmnet(ph2.train$X, ph2.train$g, family = "binomial", alpha = 0.5)
+
+plot(CV_alpha0, main = "Cross-validation - alpha = 0")
+plot(CV_alpha0.5, main = "Cross-validation - alpha = 0.5")
+
+
+```
+
+## 7)
+
+I figurerne genereret af cv.glmnet-funktionen i glmnet-pakken vil vi bemærke to lodrette linjer, der markerer positionen af "lambda.min" og "lambda.1se". Disse linjer er nyttige for at vælge den optimale lambda-værdi baseret på krydsvalidering.
+
+1. "lambda.min": Dette er lambda-værdien, der er forbundet med den mindste krydsvalideringsfejl. Det er den lambda-værdi, der typisk vælges som den optimale værdi. Den repræsenterer den mest restriktive lambda-værdi, hvor modellen stadig har en god præstation.
+
+2. "lambda.1se": Dette er lambda-værdien, der vælges ved hjælp af en en standardfejlsregel (one-standard-error rule). Denne regel forsøger at vælge en mindre restriktiv lambda-værdi, der er inden for en standardfejl af lambda-værdien, der giver den laveste krydsvalideringsfejl. "lambda.1se" værdien er ofte lidt mindre restriktiv end "lambda.min" og kan være mere passende, hvis vi ønsker en mindre kompleks model med en acceptabel præstation.
+
+De lodrette linjer for "lambda.min" og "lambda.1se" er nyttige for at identificere, hvor de tilsvarende lambda-værdier ligger på grafen og hjælper os med at vælge den optimale lambda-værdi baseret på vores præferencer og behov. Det er vigtigt at bemærke, at valget af lambda-værdien afhænger af vores specifikke situation og præference for modelens præcision og kompleksitet.
+
+
+## 8)
+
+
+Vi fitter for de optimale værdier af lambda.min og lambda.1se. Tærskelværdien er sat til 50%
+
+```{r}
+
+# Træn glmnet-modellen med krydsvalidering og få lambda-værdierne
+cv_fit <- cv.glmnet(ph2.train$X, ph2.train$g, family = "binomial")
+lambda_min <- cv_fit$lambda.min
+lambda_1se <- cv_fit$lambda.1se
+
+# Få koefficienterne for lambda.min og lambda.1se
+coef_min <- coef(cv_fit, s = "lambda.min")
+coef_1se <- coef(cv_fit, s = "lambda.1se")
+
+# Forudsig på testsættet ved hjælp af lambda.min
+pred_min <- predict(cv_fit, newx = ph2.test$X, s = lambda_min, type = "response")
+pred_labels_min <- ifelse(pred_min > 0.5, 1, 0)
+
+# Forudsig på testsættet ved hjælp af lambda.1se
+pred_1se <- predict(cv_fit, newx = ph2.test$X, s = lambda_1se, type = "response")
+pred_labels_1se <- ifelse(pred_1se > 0.5, 1, 0)
+
+# Opret forvirringsmatricer for lambda.min og lambda.1se
+confusion_matrix_min <- table(pred_labels_min, ph2.test$g)
+confusion_matrix_1se <- table(pred_labels_1se, ph2.test$g)
+
+# Vis forvirringsmatricer
+confusion_matrix_min
+confusion_matrix_1se
+
+
+```
+## 9)
+
+Koden, der er angivet, forsøger at parametrisere koefficienterne $\beta_i$ i glmnet-modellen ved hjælp af successive differenser.
+
+
+```{r}
+
+library(MASS)
+
+B <- cbind(1, contr.sdif(256))
+XB <- ph2.train$X %*% B
+CVsdif <- cv.glmnet(XB, ph2.train$g, family = "binomial")
+
+
+```
+
+
+1. library(MASS): Denne linje indlæser MASS-pakken, der indeholder funktionen contr.sdif, som bruges til at generere successive differenser.
+
+2. B <- cbind(1, contr.sdif(256)): Her oprettes en designmatrix B ved at binde sammen en kolonne med etere for konstantleddet (1) og successive differenser genereret ved hjælp af contr.sdif(256). Antallet 256 angiver antallet af faktorniveauer eller antallet af kategorier i den faktor, der repræsenteres af de successive differenser. Resultatet er en matrix B med 256 kolonner, hvor hver kolonne repræsenterer successive differenser for den tilsvarende faktorværdi.
+
+3. XB <- ph2.train$X %*% B: Denne linje multiplicerer designmatricen ph2.train$X med B for at opnå XB, som er det resulterende produkt af krydsningen mellem de beskrivende variable og successive differenser. Dette giver en ny designmatrix, der parametriserer koefficienterne ved hjælp af successive differenser.
+
+4. CVsdif <- cv.glmnet(XB, ph2.train$g, family = "binomial"): Her udføres krydsvalidering med glmnet-modellen ved hjælp af XB som inputdata og ph2.train$g som responsvariabel. Familien er angivet som "binomial" for binær logistisk regression. cv.glmnet udfører krydsvalidering for at vælge den optimale lambda-værdi baseret på krydsvalideringsfejlen.
+
+For at forstå betydningen af successive differenser kan vi se på et eksempel:
+
+```{r}
+
+solve(cbind(1, contr.sdif(10)))
+
+
+```
+
+Her oprettes en designmatrix ved at binde sammen en kolonne med etere for konstantleddet (1) og successive differenser genereret af contr.sdif(10). solve-funktionen anvendes til at beregne inversen af denne designmatrix. Resultatet er en matrix, der viser, hvordan koefficienterne $\beta_i$ parametriseres ved hjælp af successive differenser.
+
+Ved at anvende successive differenser på designmatricen i glmnet-modellen, søger man at opnå en mere struktureret og "pæn" funktion for $\beta_i$, hvor koefficienterne antages at være mere sammenhængende og mindre vilkårlige i forhold til faktorværdierne.
+
+## 10)
+
+Når man kører coef(CVsdif) på den krydsvaliderede glmnet-model med successive differenser, vil vi få koefficienterne for hver lambda-værdi. Bemærk, at i glmnet-modellen med successive differenser vil den første koefficient (intercept) blive udeladt fra resultatet, da den repræsenteres af konstantleddet 1 i designmatricen.
+
+```{r}
+
+coef_values <- coef(CVsdif)
+coef_values
+
+```
+
+Når vi har kørt koden, vil vi se en liste over koefficientværdier for hver lambda-værdi. Hver koefficient repræsenterer koefficienten for den tilsvarende successive difference i den parametriserede model.
+
+For at konvertere koefficienterne tilbage til de oprindelige $\beta_i$-værdier, kan vi multiplicere dem med designmatricen B og plotte resultaterne. 
+
+```{r}
+
+converted_coefs <- B %*% coef_values[-1]  # Multiplicer koefficienter med designmatricen, undladelse af intercept
+plot(converted_coefs, type = "l")
+
+
+
+```
+
+Når vi kører koden, vil vi få et plot, der viser de konverterede koefficientværdier som en funktion af faktornummeret (i). Plotet viser, hvordan koefficienterne ændrer sig som en "pæn" funktion af successive differenser.
+
+Bemærk, at i dette eksempel er der brugt coef_values[-1] for at undlade den første koefficient (intercept), da denne værdi allerede er repræsenteret af konstantleddet 1 i designmatricen. Ved at udelade den første koefficient kan plottet visualisere ændringerne i de øvrige koefficienter som funktion af faktornummeret.
+
+## 11)
+
+For at udføre den tilsvarende konstruktion med L2-penalty (ridge-penalty) kan vi bruge den oprindelige designmatrix (ph2.train$X) i stedet for at anvende successive differenser. Dette vil resultere i en model, hvor koefficienterne ikke er parametriseret ved hjælp af successive differenser, men i stedet er direkte forbundet med de oprindelige variabler. Her er et eksempel på, hvordan vi kan gøre det:
+
+```{r}
+
+CVridge <- cv.glmnet(ph2.train$X, ph2.train$g, family = "binomial", alpha = 0)
+coef_values_ridge <- coef(CVridge)
+coef_values_ridge
+
+
+```
+
+Ved at køre koden vil vi få koefficienterne for hver lambda-værdi for glmnet-modellen med L2-penalty. I modsætning til modellen med successive differenser vil alle koefficienter være til stede i resultatet, herunder interceptet (den første koefficient).
+
+For at visualisere de oprindelige koefficienter som en funktion af variabelindekset (i), kan vi bruge designmatricen (ph2.train$X) og de konverterede koefficienter. Her er et eksempel på, hvordan vi kan gøre det:
+
+```{r}
+
+
+converted_coefs_ridge <- ph2.train$X %*% coef_values_ridge[-1]  # Multiplicer koefficienter med designmatricen, undladelse af intercept
+plot(converted_coefs_ridge, type = "l")
+
+
+
+```
+
+Når vi kører koden, vil vi få et plot, der viser de konverterede koefficientværdier (uden intercept) som en funktion af variabelindekset. Dette plot vil illustrere, hvordan koefficienterne ændrer sig i den model, der er opnået ved anvendelse af L2-penalty.
+
+Forskellen mellem L1-penalty (Lasso) og L2-penalty (ridge) er, at L1-penalty har tendens til at skabe en mere sparsom model ved at sætte mange koefficienter til nøjagtigt nul, hvilket giver en form for variabeludvælgelse. På den anden side reducerer L2-penalty koefficientværdierne, men eliminerer dem normalt ikke helt. Dette betyder, at L2-penalty bevarer alle variabler, men med mindre betydning.
+
+Plotet med L2-penalty kan vise en mere jævn ændring i koefficienterne i forhold til variabelindekset sammenlignet med L1-penalty, hvor der er sprang i koefficientværdierne på grund af nulning af variabler. Derudover kan L2-penalty føre til mere stabil og mindre følsomme koefficienter sammenlignet med L1-penalty. Vi ser også at der virker til at være mere "støj" i plottet, da alle $\beta$-værdierne bevares.

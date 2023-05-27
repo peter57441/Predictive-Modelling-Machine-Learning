@@ -1,0 +1,421 @@
+---
+title: "PML_6"
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-04-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE)
+```
+
+
+```{r}
+
+library(tidyverse)
+library(gam)
+library(readr)
+
+
+
+```
+# Opgave 1 (GAM)
+
+### 1 
+
+Jeg indlæser datasættet `SAhearts`:
+
+
+```{r}
+
+SAheart <- read_csv("SAheart.data.txt", 
+    col_types = cols(row.names = col_skip()))
+
+
+```
+
+
+### 2
+
+Jeg bruger `gam()` funktionen til at fitte en additiv model med variable tilsvare figur 5.4 fra bogen dvs.:
+
+`sbp, tobacco, ldl, famhist, obesity, age`. Jeg sætter `df=4` for alle prædiktorerne (jeg bruger altså regression splines til alle prædiktorerne).
+
+```{r}
+
+# Fit a GAM model with chd as the response variable and sbp, tobacco, ldl, famhist, obesity, and age as predictors
+fitgam <- gam(chd ~ s(sbp, df=4) + s(tobacco, df=4) + s(ldl, df=4) + famhist + s(obesity, df=4) + s(age, df=4), binomial, data=SAheart)
+
+# Print the summary of the model
+summary(fitgam)
+
+
+```
+
+
+### 3
+
+Jeg plotter de partielle effekter af modellens variable.
+
+```{r}
+
+# Plot the partial effect of each predictor variable
+plot(fitgam, pages=1, seWithMean=TRUE)
+
+```
+
+
+### 4
+
+Jeg sammenligner den fulde model med en reduceret model, hvor jeg fjerne `age` variablen og laver en $\chi^2$-test for at se hvilken model der fitter bedre.
+
+```{r}
+
+# Fit a reduced GAM model without the age variable
+fitgam_reduced <- gam(chd ~ s(sbp, df=4) + s(tobacco, df=4) + s(ldl, df=4) + famhist + s(obesity, df=4), binomial, data=SAheart)
+
+# Compare the full and reduced models using an ANOVA test
+anova(fitgam_reduced, fitgam, test="Chisq")
+
+
+```
+Baseret på outputtet ovenfor kan vi se at den fulde model med `age`variablen har en statistik signifikant lavere residual. Hvorfor modellen bør være at fortrække.
+
+
+### 5
+
+Jeg udfører tilsvarende analyse men bruger `mgcv::gam` istedet for at diskutere forskelle og ligheder.
+
+```{r}
+
+
+
+# Fit a GAM model using mgcv::gam
+library(mgcv)
+
+fitmgcv <- gam(chd ~ s(age, k=5) + s(sbp, k=5) + s(tobacco, k=5) + s(ldl, k=5) + s(obesity, k=5) + famhist, data = SAheart, family=binomial)
+
+# Summarize the model
+summary(fitmgcv)
+
+
+```
+
+Jeg tester `age` variablen for linearitet ved at sammenligne den oprindelige model. Hvor det var på spline form med en hvor det indgår lineært:
+
+```{r}
+
+# Fit the alternative model with age only as a linear term
+fitmgcv_alt <- gam(chd ~ s(sbp, k = 5) + s(tobacco, k = 5) + s(ldl, k = 5) + 
+  s(obesity, k = 5) + famhist + age, data = SAheart, family = binomial)
+
+# Test for the difference in deviance between the models
+anova(fitmgcv_alt, fitmgcv, test = "Chisq")
+
+
+```
+Baseret på p-værdien kan vi ikke inkludere om det ene model er bedre end den anden. Derfor kan vi heller ikke afvise at `age` bør have en lineær form i vores model.
+
+# Opgave 2
+
+Vi ser på datasættet `phoneme` og benytter træ-baserede metoder til at prædiktere data.
+
+### 1 
+
+Jeg indlæser datasættet.
+
+```{r}
+
+# Load the dataset and select relevant rows
+phoneme <- read.csv("phoneme.data.txt")
+phoneme <- subset(phoneme, g == "aa" | g == "ao")
+
+# Create new data frame with predictor variables and label
+ph2 <- data.frame(X = I(as.matrix(phoneme[,2:257])),
+                  g = factor(phoneme$g, levels = c("aa", "ao")))
+
+# Split data into training and test sets
+N <- nrow(ph2)
+train <- sample(1:N, 1000)
+test <- setdiff(1:N, train)
+
+
+
+```
+
+
+### 2
+
+Jeg gentager analysen for opgavesæt 2 med natural splines til at prædiktere:
+
+```{r}
+
+# Fit logistic regression model with 12 basis functions
+data <- ph2[train,]
+ns12 <- ns(1:256, 12)
+fit12tr <- glm(g ~ X %*% ns12, family = binomial, data = data)
+
+# Predict labels for test set and create confusion table
+predtst <- predict(fit12tr, newdata = ph2[test,]) > 0.5
+table(predtst, ph2$g[test])
+
+
+```
+Umiddelbart virker det til at modellen er mere villig til at klassificere en lyd som "ao", men dette gør ikke nødvendigvis modellen bedre til at klassificere "ao" (da før eller siden vil modellen jo ramme rigtigt).
+
+### 3 og 4
+
+Planen er nu at udføre tilsvarende analyse med `rpart, randomForest, ada` og `gbm`. 
+
+
+```{r}
+
+# Load required packages
+library(rpart)
+library(randomForest)
+library(ada)
+library(gbm)
+
+
+```
+
+```{r}
+
+# Create new data frame with predictor variables and label
+ph3 <- data.frame(phoneme[,2:257], 
+                  g = factor(phoneme$g, levels = c("aa", "ao")))
+
+# Split data into training and test sets
+N <- nrow(ph3)
+train <- sample(1:N, 1000)
+test <- setdiff(1:N, train)
+
+# Fit and predict with rpart
+fit_rpart <- rpart(g ~ ., data = ph3[train,])
+pred_rpart <- predict(fit_rpart, newdata = ph3[test,], type = "class")
+
+# Fit and predict with randomForest
+fit_rf <- randomForest(g ~ ., data = ph3[train,])
+pred_rf <- predict(fit_rf, newdata = ph3[test,])
+
+# Fit and predict with ada
+fit_ada <- ada(g ~ ., data = ph3[train,])
+pred_ada <- predict(fit_ada, newdata = ph3[test,])
+
+# Fit and predict with gbm
+fit_gbm <- gbm((0:1)[g] ~ ., data = ph3[train,], distribution = "bernoulli")
+pred_gbm <- predict(fit_gbm, newdata = ph3[test,], type = "response")
+
+# Create confusion tables
+table(pred_rpart, ph3$g[test])
+table(pred_rf, ph3$g[test])
+table(pred_ada, ph3$g[test])
+print("pred_gbm")
+table(pred_gbm > 0.5, ph3$g[test])
+
+
+
+```
+Baseret på confusion-matricerne er det svært at drage en endelig konklusion om, hvilken model der præsterer bedst. Dog kan der drages nogle observationer:
+
+- Rpart-modellen har klassificeret flere tilfælde forkert end de andre modeller for begge klasser.
+- Random Forest-modellen ser ud til at præstere bedre end de andre modeller for "aa"-klassen, men lidt dårligere for "ao"-klassen.
+- Ada-modellen ser ud til at præstere bedre end de andre modeller for "ao"-klassen, men lidt dårligere for "aa"-klassen.
+- GBM-modellen ser ud til at præstere lignende som de andre modeller for begge klasser.
+
+(Personligt ville jeg måske mene at Random Forest-modellen virker bedst)
+
+Modellerne er kalibreret på følgende parametre:
+
+- rpart: Standardværdierne for funktionen `rpart.control()`, som kaldes af `rpart()` medmindre andet er specificeret, er `maxdepth = 30`, `minsplit = 20`, `cp = 0.01` og `xval = 10`. Disse styrer den maksimale dybde af træet, det minimale antal observationer, der kræves for at lave en splittelse, kompleksitetsparametret til brug for beskæring af træet og antallet af krydsvalideringsfolds.
+
+- randomForest: Standardværdien for antallet af træer er `ntree = 500`. Andre vigtige hyperparametre, der kan specificeres, omfatter antallet af variabler, der tilfældigt udvælges ved hver splittelse (mtry), og dybden af træerne (maxdepth).
+
+- ada: Standardværdien for antallet af træer er `iter = 50`. Andre vigtige hyperparametre inkluderer læringshastigheden (nu) og den maksimale dybde af træerne (maxdepth).
+
+- gbm: Standardværdien for antallet af træer er `n.trees = 100`. Andre vigtige hyperparametre inkluderer læringshastigheden (shrinkage) og interaktionsdybden af træerne (interaction.depth).
+
+Det er vigtigt at bemærke, at standardværdierne muligvis ikke er optimale for et givet datasæt, og tuning af disse hyperparametre ved hjælp af teknikker som krydsvalidering kan føre til en bedre ydeevne af modellen.
+
+# Opgave 3
+
+Vi ser på `juul` datasættet og udtrækker personer mellem 6 og 20 år.
+
+### 1
+
+Jeg plotter `sqrt(igf1)` mod `age` med indikation af køn:
+
+```{r}
+
+library(ISwR)
+
+juulyoung <- subset(juul, !is.na(igf1) & age <20 & age > 6)
+juulboy <- subset(juulyoung, sex==1)
+juulgrl <- subset(juulyoung, sex==2)
+
+```
+
+```{r}
+
+ggplot(juulyoung, aes(x=age, y=sqrt(igf1), color=factor(sex))) +
+  geom_point() +
+  labs(x="Alder", y="sqrt(IGF-1") +
+  scale_color_discrete(name="Køn", labels=c("Pige", "Dreng"))
+
+```
+Det ser ud til at IGF1 (Insulin-like Growth Factor 1), stiger med alderen for begge køn og falder efter omkring de 15-16 år. 
+
+### 2
+
+Jeg indtegner nu en smoothing spline for hvert køn:
+
+```{r}
+library(mgcv)
+
+# Først laver vi separate datasæt for drenge og piger
+juulboy <- subset(juulyoung, sex==1)
+juulgrl <- subset(juulyoung, sex==2)
+
+par(mfrow=c(1,2)) # set plotting layout to two columns
+
+# plot for boys
+plot(sqrt(igf1)~age, juulboy, main="IGF-1 Levels for Drenge", xlab="Age", ylab="sqrt(IGF-1)")
+lines(with(juulboy, smooth.spline(age, sqrt(igf1))), col="red")
+
+# plot for girls
+plot(sqrt(igf1)~age, juulgrl, main="IGF-1 Levels for Piger", xlab="Age", ylab="sqrt(IGF-1)")
+lines(with(juulgrl, smooth.spline(age, sqrt(igf1))), col="red")
+
+
+
+
+
+```
+
+Plotsene viser nogenlune det samme og dermed også splines.
+
+### 3
+
+Jeg laver nu samme analyse med `randomForest` hvor jeg fitter `age` og `sex` som prædiktorer og tegner de prædikterede værdier:
+
+```{r}
+
+library(randomForest)
+
+set.seed(123)
+
+# Først laver vi separate datasæt for drenge og piger
+juulboy <- subset(juulyoung, sex == 1)
+juulgrl <- subset(juulyoung, sex == 2)
+
+# Opretter et nyt datasæt med alder og køn
+juul_data <- data.frame(age = juulyoung$age, sex = juulyoung$sex, igf1 = juulyoung$igf1)
+
+# Splitter datasættet i træning og test
+train <- sample(nrow(juul_data), 800, replace = FALSE)
+juul_train <- juul_data[train, ]
+juul_test <- juul_data[-train, ]
+
+# Random forest fit med alder og køn som prædiktorer
+fitrf <- randomForest(igf1 ~ age + sex, data = juul_train, importance = TRUE, ntree = 500, do.trace = 100)
+
+# Forudsigelse på testdata
+juul_test$pred_igf1 <- predict(fitrf, newdata = juul_test)
+
+# Tegner de forudsigede værdier for drenge og piger
+plot(sqrt(igf1) ~ age, juulboy, main = "Random Forest forudsigelse for drenge", xlab = "Alder", ylab = "sqrt(IGF1)", pch = 20, col = "blue")
+lines(with(juulboy, smooth.spline(age, sqrt(igf1))), col = "red")
+lines(juul_test$age[juul_test$sex == 1], sqrt(juul_test$pred_igf1[juul_test$sex == 1]), col = "green", lwd = 2)
+
+plot(sqrt(igf1) ~ age, juulgrl, main = "Random Forest forudsigelse for piger", xlab = "Alder", ylab = "sqrt(IGF1)", pch = 20, col = "magenta")
+lines(with(juulgrl, smooth.spline(age, sqrt(igf1))), col = "red")
+lines(juul_test$age[juul_test$sex == 2], sqrt(juul_test$pred_igf1[juul_test$sex == 2]), col = "green", lwd = 2)
+
+
+
+```
+
+Modellen virker til umiddelbart at prædikterer drengenes niveau af IGF-1 generelt lidt højere end pigernes. 
+
+### 4
+
+Jeg sætter `ntree = 1000` (standard er 500) og `mtry = 3` (standard er $\sqrt{p}$) for at se på om det ændrer prædiktionsevnen.
+
+```{r}
+
+ntree <- 1000
+mtry <- 3
+
+# Først laver vi separate datasæt for drenge og piger
+juulboy <- subset(juulyoung, sex == 1)
+juulgrl <- subset(juulyoung, sex == 2)
+
+# Opretter et nyt datasæt med alder og køn
+juul_data <- data.frame(age = juulyoung$age, sex = juulyoung$sex, igf1 = juulyoung$igf1)
+
+# Splitter datasættet i træning og test
+train <- sample(nrow(juul_data), 800, replace = FALSE)
+juul_train <- juul_data[train, ]
+juul_test <- juul_data[-train, ]
+
+# Random forest fit med alder og køn som prædiktorer
+fitrf <- randomForest(igf1 ~ age + sex, data = juul_train, importance = TRUE, ntree = ntree, mtry = mtry, do.trace = 100)
+
+# Forudsigelse på testdata
+juul_test$pred_igf1 <- predict(fitrf, newdata = juul_test)
+
+# Tegner de forudsigede værdier for drenge og piger
+plot(sqrt(igf1) ~ age, juulboy, main = "Random Forest forudsigelse for drenge", xlab = "Alder", ylab = "sqrt(IGF1)", pch = 20, col = "blue")
+lines(with(juulboy, smooth.spline(age, sqrt(igf1))), col = "red")
+lines(juul_test$age[juul_test$sex == 1], sqrt(juul_test$pred_igf1[juul_test$sex == 1]), col = "green", lwd = 2)
+
+plot(sqrt(igf1) ~ age, juulgrl, main = "Random Forest forudsigelse for piger", xlab = "Alder", ylab = "sqrt(IGF1)", pch = 20, col = "magenta")
+lines(with(juulgrl, smooth.spline(age, sqrt(igf1))), col = "red")
+lines(juul_test$age[juul_test$sex == 2], sqrt(juul_test$pred_igf1[juul_test$sex == 2]), col = "green", lwd = 2)
+
+
+
+```
+
+Prædiktionerne virker til at blive mere lineær men for drengene virker det lidt som overfit. Det skyldes at vi har inkluderet flere træer og flere tilfældige udvalgte parametre.
+
+### 5
+
+Vi laver samme analyse igen men denne gang med et `gbm` fit (gradient boosting). Antallet af træer er sat til 500:
+
+```{r}
+
+library(gbm)
+
+set.seed(123)
+
+# Opretter et nyt datasæt med alder og køn
+juul_data <- data.frame(age = juulyoung$age, sex = juulyoung$sex, igf1 = juulyoung$igf1)
+
+# Splitter datasættet i træning og test
+train <- sample(nrow(juul_data), 800, replace = FALSE)
+juul_train <- juul_data[train, ]
+juul_test <- juul_data[-train, ]
+
+# Gbm fit med alder og køn som prædiktorer
+fitgbm <- gbm(igf1 ~ age + sex, data = juul_train, distribution = "gaussian",
+              n.trees = 500, interaction.depth = 4, shrinkage = 0.01, cv.folds = 5,
+              verbose = TRUE)
+
+# Forudsigelse på testdata
+juul_test$pred_igf1 <- predict(fitgbm, newdata = juul_test, n.trees = 500)
+
+# Tegner de forudsigede værdier for drenge og piger
+plot(sqrt(igf1) ~ age, juulboy, main = "GBM forudsigelse for drenge", xlab = "Alder", ylab = "sqrt(IGF1)", pch = 20, col = "blue")
+lines(with(juulboy, smooth.spline(age, sqrt(igf1))), col = "red")
+lines(juul_test$age[juul_test$sex == 1], sqrt(juul_test$pred_igf1[juul_test$sex == 1]), col = "green", lwd = 2)
+
+plot(sqrt(igf1) ~ age, juulgrl, main = "GBM forudsigelse for piger", xlab = "Alder", ylab = "sqrt(IGF1)", pch = 20, col = "magenta")
+lines(with(juulgrl, smooth.spline(age, sqrt(igf1))), col = "red")
+lines(juul_test$age[juul_test$sex == 2], sqrt(juul_test$pred_igf1[juul_test$sex == 2]), col = "green", lwd = 2)
+
+
+```
+Umiddelbart virker det til at Gradient Boosting performer bedre end Random Forest i det her tilfælde (særligt for pigerne)
+
