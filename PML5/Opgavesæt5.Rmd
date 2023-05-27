@@ -40,7 +40,7 @@ Vi indlæsser datasættet i R. Og plotter kurven for temperaturudviklingen
 over tid.
 
 ```{r}
-
+set.seed(2023)
 
 vejrdata <- read_delim("vejrdata.txt", delim = "\t", 
     escape_double = FALSE, trim_ws = TRUE)
@@ -366,7 +366,7 @@ mse1 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred1)^2)
 mse2 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred2)^2)
 
 # Print the MSE
-cat("MSE_1:", mse1, "\n", "MSE_2:", mse2)
+cat("Simpel MSE:", mse1, "\n", "LSTM MSE:", mse2)
 
 
 
@@ -376,6 +376,140 @@ Som det fremgår af plottet og MSE ovenfor prædikterer begge modeller markant b
 
 Ulemper ved den rullende metode er at det er mere beregningstungt. Samt kan det være svært at bedømme hvilken størrelse $T$ skal have. Hvis $T$ er for lille, kan modellen ikke fange de langsigtede afhængigheder i dataene, mens hvis T er for stor, kan det føre til overfitting af modellen. Endelig kan den rullende tilgang være mere følsom overfor outliers eller pludselige ændringer i dataene, da tidligere data også påvirker prædiktionerne. Hvis der sker pludselige ændringer i dataene, kan det tage tid for modellen at "justere" sig og lave nøjagtige prædiktioner igen. 
 
+
+## i)
+
+Jeg inkluderer nu også `lufttryk` og `luftfugtighed` som prædiktorer. Bemærk, at det nu kun giver mening at prædiktere med metoden fra spørgsmål (h):
+
+
+
+```{r}
+
+# Standardisering af lufttryk og luftfugtighed
+lufttryk_std <- vejrdata$lufttryk_std <- scale(vejrdata$lufttryk)
+luftfugtighed_std <- vejrdata$luftfugtighed_std <- scale(vejrdata$luftfugtighed)
+
+# Definér T, t0 og N
+T <- 20
+t0 <- 32000
+N <- t0 - T
+
+# Opret Xarray og Yarray
+Xarray <- array(rep(NA, N*T*3), dim = c(N, T, 3))
+Yarray <- array(temp_std[(T+1):(t0+1)], dim = c(N, 1, 1))
+
+# Udfyld Xarray og Yarray
+for (i in 1:N) {
+  Xarray[i,,1] <- temp_std[i:(i + T - 1)]
+  Xarray[i,,2] <- lufttryk_std[i:(i + T - 1)]
+  Xarray[i,,3] <- luftfugtighed_std[i:(i + T - 1)]
+}
+
+
+
+
+
+```
+
+
+```{r}
+
+model3 <- keras_model_sequential() %>%
+  layer_lstm(units = 10, input_shape = c(T, 3), activation = "tanh", dropout = 0.001, return_sequences = TRUE) %>%
+  layer_lstm(units = 8, dropout = 0.001, activation = "tanh") %>%
+  layer_dense(units = 1) %>% 
+  
+  compile(loss = "mse", 
+          optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9))
+
+fit3 <- model3 %>% 
+  fit(Xarray, 
+      Yarray, 
+      epochs = 30, 
+      batch_size = 64, 
+      verbose = FALSE
+      )
+
+
+
+```
+
+```{r}
+
+model4 <- keras_model_sequential() %>%
+  layer_simple_rnn(units = 10, input_shape = c(T, 3), activation = "tanh", dropout = 0.001, return_sequences = TRUE) %>%
+  layer_simple_rnn(units = 8, dropout = 0.001, activation = "tanh") %>%
+  layer_dense(units = 1) %>% 
+  
+  compile(loss = "mse", 
+          optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9))
+
+fit4 <- model4 %>% 
+  fit(Xarray, 
+      Yarray, 
+      epochs = 30, 
+      batch_size = 64, 
+      verbose = FALSE
+      )
+
+```
+
+
+
+
+```{r}
+
+
+ahead <- 10 # så langt, jeg vil kigge fremad
+
+Xtest1 <- array(rep(NA, T), dim = c(1, T, 3))
+Xtest1[1,,1] <- temp_std[(t0-T+1):t0]
+Xtest1[1,,2] <- lufttryk_std[(t0-T+1):t0]
+Xtest1[1,,3] <- luftfugtighed_std[(t0-T+1):t0]
+
+# Generate test predictions
+test_predictions_LSTM <- rep(NA, ahead)
+test_predictions_Normal <- rep(NA, ahead)
+
+for (i in 1:ahead) {
+  test_predictions_LSTM[i] <- model3 %>% predict(Xtest1)
+  Xtest1[1,1:(T-1),] <- Xtest1[1,2:T,]
+  Xtest1[1,T,1] <- test_predictions[i]
+  Xtest1[1,T,2] <- lufttryk_std[t0+i]
+  Xtest1[1,T,3] <- luftfugtighed_std[t0+i]
+}
+
+for (i in 1:ahead) {
+  test_predictions_Normal[i] <- model4 %>% predict(Xtest1)
+  Xtest1[1,1:(T-1),] <- Xtest1[1,2:T,]
+  Xtest1[1,T,1] <- test_predictions[i]
+  Xtest1[1,T,2] <- lufttryk_std[t0+i]
+  Xtest1[1,T,3] <- luftfugtighed_std[t0+i]
+}
+
+# Scale the predictions back to their original form
+U_pred3 <- test_predictions_LSTM * sd(temperatur) + mean(temperatur)
+U_pred4 <- test_predictions_Normal * sd(temperatur) + mean(temperatur)
+
+plot(temperatur[(t0-99):(t0+ahead)], type="l", lwd=2, xlab="t", ylab = "temperatur", main="Prædiktioner med rullende prognose og lufttryk/fugtighed")
+lines(101:(100+ahead), U_pred3, col="red")
+lines(101:(100+ahead), U_pred4, col="blue")
+legend("topleft", legend=c("Faktisk temperatur", "Model 3 (LSTM, 3 x'er)", "Model 4 (Simpel RNN, 3 x'er)"), col=c("black", "red", "blue"), lty=1)
+
+
+
+# Calculate the MSE
+mse3 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred3)^2)
+mse4 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred4)^2)
+
+# Print the MSE
+cat("MSE_3:", mse3, "\n", "MSE_4:", mse4)
+
+
+
+
+```
+Det virker til at inkluderingen af `lufttryk` og `luftfugtighed` som prædiktorer gør modellerne bedre til at prædiktere end tilfældet med kun `temperatur` som prædiktorer. Tilføjelsen af lufttryk og luftfugtighed som ekstra lag i `Xarray` giver modellerne mulighed for at lære afhængighederne mellem temperatur, lufttryk og luftfugtighed, og på den måde prædiktere temperatur mere præcist. Lufttryk og luftfugtighed kan påvirke temperatur og derfor er deres tilstedeværelse i modellen vigtig for at tage højde for den effekt, de har på temperaturen.
 
 # Opgave 2
 
