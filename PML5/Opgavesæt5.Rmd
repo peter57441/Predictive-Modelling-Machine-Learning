@@ -1,0 +1,746 @@
+---
+title: 'Predictive Modelling og Machine Learning: Opgavesæt 5'
+output:
+  pdf_document: default
+  html_document: default
+date: "2023-04-11"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, cache = TRUE)
+```
+
+```{r}
+
+library(keras)
+library(readr)
+library(lubridate)
+library(tidyverse)
+
+```
+
+# Opgave 1
+
+Denne opgave tager udgangspunkt i datasættet vejrdata.txt, som
+indeholder vejrmålinger foretaget ved Max--Plack--Instituttet, der
+ligger i byen Jena i Tyskland. Der er målinger for hver anden time
+mellem 1. januar 2009 og 31. december 2016 -- i alt målinger til 35037
+forskellige tidspunkter. Til hvert tidspunkt er der målt:
+
+-   `lufttryk`: Luftrykket i mbar
+-   `temperatur`: Temperaturen i grader Celsius
+-   `luftfugtighed`: Luftfugtigheden i procent.
+
+## a)
+
+Vi indlæsser datasættet i R. Og plotter kurven for temperaturudviklingen
+over tid.
+
+```{r}
+set.seed(2023)
+
+vejrdata <- read_delim("vejrdata.txt", delim = "\t", 
+    escape_double = FALSE, trim_ws = TRUE)
+
+# Konverter "tidspunkt" til datetime format
+vejrdata <- vejrdata %>%
+  mutate(tidspunkt = dmy_hms(tidspunkt))
+
+temperatur <- vejrdata$temperatur
+plot(temperatur,type="l",lwd=2,xlab="t")
+
+
+
+```
+
+## b)
+
+Jeg standardiserer `temperatur`-variablen.
+
+```{r}
+
+# (b) Standardiser temperatur-variablen
+temp_std <- vejrdata$temperatur_std <- scale(vejrdata$temperatur)
+
+
+
+```
+
+## c)
+
+Jeg fitter et almindeligt rekurrent neural netværk frem til og med
+tidspunkt $t_0$ og sætter $T=20$ (hukkomelse bagud, som bruges til
+information til at fitte på). Jeg benytter to hidden layers med hhv. 10
+og 8 units i hver. Jeg benytter "tanh" som activation function i de to
+hidden layers. Jeg tilbage 10% af data til validering. Jeg inkluderer
+også drouput på 0.001
+
+```{r}
+
+# Definér T, t0 og N
+T <- 20
+t0 <- 32000
+N <- t0 - T
+
+# Opret Xarray og Yarray
+Xarray <- array(rep(NA, N*T), dim = c(N, T, 1))
+Yarray <- array(temp_std[(T+1):(t0+1)], dim = c(N, 1, 1))
+
+# Udfyld Xarray og Yarray
+for (i in 1:N) {
+  Xarray[i,,1] <- temp_std[i:(i + T - 1)]
+}
+
+
+
+
+```
+
+```{r}
+
+##############
+# Denne kodestump bruges til at validere RNN
+##############
+
+# model1 <- keras_model_sequential() %>%
+#   layer_simple_rnn(units = 10, return_sequences=TRUE, activation = "tanh", dropout=0.001, input_shape = c(T,1)) %>%
+#   layer_simple_rnn(units = 8, activation = "tanh",dropout=0.001) %>%
+#   layer_dense(units = 1) %>%
+#   
+#   compile(
+#     loss = 'mse',
+#     optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)
+#   )
+# 
+# fit1 <- model1 %>%
+#   fit(
+#     x = Xarray,
+#     y = Yarray,
+#     epochs = 30,
+#     batch_size = 64,
+#     verbose = FALSE
+#   )
+
+```
+
+![Træning og Val MSE af almindelig RNN](fit1.png)
+
+
+Det ser ikke ud til at være problematisk med fit af modellen, da val og
+train falder i takt med at epoch stiger.
+
+
+## d)
+
+Jeg fitter modellen igen men uden valideringssplit, da de 10% valideringsdata er taget som de sidte 10% af information med i fittet, når værdier efter tid 32000 skal prædikteres.
+
+```{r}
+
+model1 <- keras_model_sequential() %>%
+  layer_simple_rnn(units = 10, return_sequences=TRUE, activation = "tanh", dropout=0.001, input_shape = c(T,1)) %>%
+  layer_simple_rnn(units = 8, activation = "tanh",dropout=0.001) %>%
+  layer_dense(units = 1) %>%
+
+  compile(
+    loss = 'mse',
+    optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9)
+  )
+
+fit1 <- model1 %>%
+  fit(
+    x = Xarray,
+    y = Yarray,
+    epochs = 30,
+    batch_size = 64,
+    verbose = FALSE
+  )
+
+```
+
+
+```{r}
+
+summary(model1)
+fit1
+
+```
+
+
+## e)
+
+Jeg bruger nu den fittede model til prædiktere variablen `temperatur` til tidspunkterne:
+
+$$32001,32002, \ldots,32010$$
+på baggrund af `temperatur` i tidsintervallet $31981,31982, \ldots,32010$
+
+
+```{r}
+
+ahead<-10 # så langt, jeg vil kigge fremad
+
+
+Xtest1 <- array(rep(NA, T), dim = c(1, T, 1))
+Xtest1[1,,1] <- temp_std[(t0-T+1):t0]
+
+# Generate test predictions
+test_predictions <- rep(NA, ahead)
+
+for (i in 1:ahead) {
+  test_predictions[i] <- model1 %>% predict(Xtest1)
+  Xtest1[1,1:(T-1),1] <- Xtest1[1,2:T,1]
+  Xtest1[1,T,1] <- test_predictions[i]
+}
+
+# Scale the predictions back to their original form
+U_pred1 <- test_predictions * sd(temperatur) + mean(temperatur)
+
+
+
+# tegning med zoom
+plot(temperatur[(t0-99):(t0+ahead)],type='l',lwd=2,xlab='t',ylab='temperatur')
+lines(101:(100+ahead),U_pred1,col='red')
+
+# Calculate the MSE
+mse1 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred1)^2)
+
+# Print the MSE
+cat("MSE:", mse1)
+
+
+```
+Det virker umiddelbart til at modellen er rigtig god til at prædiktere temperaturerne. Hvilket heller ikke virker meget usædvanligt, da temperaturer jo pr. definition har regelmæssige trend ift. årstiderne. 
+
+## f)
+
+Jeg gentager nu hele analysen igen med med en LSTM-model. Jeg benytter samme $T$, hidden layers og units igen som før. Jeg bruger igen 30 epochs med batch size på 64.
+
+
+```{r}
+
+# model2 <- keras_model_sequential() %>%
+#   layer_lstm(units = 10, input_shape = c(T, 1), activation = "tanh", dropout=0.001, return_sequences = TRUE) %>%
+#   layer_lstm(units = 8, dropout = 0.001, activation = "tanh") %>%
+#   layer_dense(units = 1) %>% 
+#   
+#   compile(loss = "mse", 
+#           optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9))
+# 
+# 
+# fit2 <- model2 %>% 
+#   fit(Xarray, 
+#       Yarray, 
+#       epochs = 30, 
+#       batch_size = 64, 
+#       validation_split = 0.1,
+#       verbose = FALSE
+#       )
+
+
+
+```
+![Træning og Val MSE af LSTM RNN](fit2.png)
+
+
+```{r}
+
+
+model2 <- keras_model_sequential() %>%
+  layer_lstm(units = 10, input_shape = c(T, 1), activation = "tanh", dropout=0.001, return_sequences = TRUE) %>%
+  layer_lstm(units = 8, dropout = 0.001, activation = "tanh") %>%
+  layer_dense(units = 1) %>% 
+  
+  compile(loss = "mse", 
+          optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9))
+
+
+fit2 <- model2 %>% 
+  fit(Xarray, 
+      Yarray, 
+      epochs = 30, 
+      batch_size = 64, 
+      verbose = FALSE
+      )
+
+```
+
+
+
+
+
+```{r}
+
+summary(model2)
+fit2
+
+```
+Igen ser tænnings og validerings loss fint ud. Så jeg træner modellen igen uden validerings-split. 
+
+
+```{r}
+
+ahead<-10 # så langt, jeg vil kigge fremad
+
+
+Xtest1 <- array(rep(NA, T), dim = c(1, T, 1))
+Xtest1[1,,1] <- temp_std[(t0-T+1):t0]
+
+# Generate test predictions
+test_predictions <- rep(NA, ahead)
+
+for (i in 1:ahead) {
+  test_predictions[i] <- model2 %>% predict(Xtest1)
+  Xtest1[1,1:(T-1),1] <- Xtest1[1,2:T,1]
+  Xtest1[1,T,1] <- test_predictions[i]
+}
+
+# Scale the predictions back to their original form
+U_pred2 <- test_predictions * sd(temperatur) + mean(temperatur)
+
+
+
+# tegning med zoom
+plot(temperatur[(t0-99):(t0+ahead)],type='l',lwd=2,xlab='t',ylab='temperatur')
+lines(101:(100+ahead),U_pred2,col='red')
+
+# Calculate the MSE
+mse2 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred2)^2)
+
+# Print the MSE
+cat("MSE:", mse2)
+
+
+```
+
+Interessant nok virker det til at LSTM-modellen prædikterer dårlige med en MSE på ca. 4,19 kontra 1,48 ved den almindelige RNN. Dette kan bla. skyldes overfit, forkert hyperparametrer valg så som antal lag, units, epochs etc. 
+
+## g)
+
+Jf. summaries fra tidligere vides det at den simple RNN har 281 parametere og LSTM har 1097. Årsagen til, at LSTM-modellen har flere parametre end den simple RNN-model, skyldes forskellen i designet af de to modeller.
+
+I den simple RNN-model bestemmes antallet af parametre af antallet af enheder i hver skjult lag og inputstørrelsen (længden af inputvektoren). I vores eksempel har den simple RNN-model 2 skjulte lag med henholdsvis 10 og 8 units og en inputlængde på 20. Dermed er det samlede antal parametre i den simple RNN-model:
+
+$$(10 \times 20) + 10 + (8 \times 10) + 8 + 1 = 281$$
+På den anden side har hver LSTM-celle i LSTM-modellen 4 sæt vægte: inputvægte, rekursive vægte, bias-værdier og cellestatvægte. Inputvægtene og de rekursive vægte ganges med henholdsvis inputdata og tidligere output, og de resulterende værdier lægges sammen med bias-værdierne for at producere cellens input. 
+
+Antallet af parametre i hver LSTM-celle bestemmes af antallet af enheder i cellen og størrelsen på input og output. I vores eksempel har LSTM-modellen 2 skjulte lag med henholdsvis 10 og 8 enheder og en inputvektorlængde på 20. Dermed er det samlede antal parametre i LSTM-modellen:
+
+$$(4 \times (20 \times 10 \times 10)) + (4 \times (8 \times 10 \times 10)) + (10 \times 4) + (8 \times 4) + 1 = 1,097$$
+Derfor har LSTM-modellen flere parametre end den simple RNN-model, fordi hver LSTM-celle har flere sæt vægte og bias end den simple RNN-celle.
+
+## h)
+
+Denne tilgang til prædiktionen er baseret på at bruge en rullende prognose, hvor de første $T$ datapunkter bruges til at lave den første prædiktion, og derefter tilføjes et yderligere datapunkt til inputsekvensen, så der kan laves en ny prædiktion, osv. Det betyder, at prædiktionerne bliver lavet i realtid baseret på de mest aktuelle data.
+
+Sammenlignet med den forrige prædiktionsmetode, hvor der blev lavet en prædiktion for en fast periode (10 eller 100 perioder) fremad, giver den rullende prognose en mere dynamisk prædiktion, der tager hensyn til den seneste udvikling i inputdataene. Dette kan gøre prædiktionerne mere nøjagtige og pålidelige.
+
+I dette tilfælde bruges de seneste $T$ datapunkter til at lave prædiktionen, og derefter tilføjes et nyt datapunkt fra den virkelige tidsserie for at lave den næste prædiktion. Dette betyder, at prædiktionen for hvert tidspunkt er baseret på en længere inputsekvens end tidligere prædiktioner, hvilket kan forbedre modellens evne til at fange komplekse sammenhænge i dataene. Sagt med andre ord har vi flere datapunkter i vores estimation.
+
+```{r}
+
+ahead<-100
+
+Xtest<-array(rep(NA,ahead*T),dim=c(ahead,T,1))
+
+for (i in 1:ahead){
+  Xtest[i,,1] <- temp_std[(t0-T+i):(t0-1+i)]
+}
+
+test_predictions1 <- model1 %>% predict(Xtest)
+
+U_pred1 <- test_predictions1*sd(temperatur) + mean(temperatur)
+
+test_predictions2 <- model2 %>% predict(Xtest)
+
+U_pred2 <- test_predictions2*sd(temperatur) + mean(temperatur)
+
+plot(temperatur[(t0-99):(t0+ahead)], type="l", lwd=2, xlab="t", ylab = "temperatur", main="Prædiktioner med rullende prognose")
+lines(101:(100+ahead), U_pred1, col="red")
+lines(101:(100+ahead), U_pred2, col="blue")
+legend("topright", legend=c("Faktisk temperatur", "Model 1 (simpel RNN)", "Model 2 (LSTM)"), col=c("black", "red", "blue"), lty=1)
+
+# Calculate the MSE
+mse1 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred1)^2)
+mse2 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred2)^2)
+
+# Print the MSE
+cat("Simpel MSE:", mse1, "\n", "LSTM MSE:", mse2)
+
+
+
+```
+
+Som det fremgår af plottet og MSE ovenfor prædikterer begge modeller markant bedre end før. Hvilket skyldes at der nu prædikteres på længere datafrekvenser end før. I den oprindelige tilgang blev prædiktionerne lavet ud fra de sidste $T$ datapunkter uden at tage hensyn til tidligere data. Dette kan føre til mindre nøjagtige prædiktioner, især hvis der er stærke langsigtede afhængigheder i dataene. Ved at bruge en rullende tilgang kan modellen tage hensyn til disse langsigtede afhængigheder og generelt bedre fange de komplekse mønstre i dataene. Det er derfor, vi ser en forbedring i prædiktionerne ved brug af den rullende tilgang.
+
+Ulemper ved den rullende metode er at det er mere beregningstungt. Samt kan det være svært at bedømme hvilken størrelse $T$ skal have. Hvis $T$ er for lille, kan modellen ikke fange de langsigtede afhængigheder i dataene, mens hvis T er for stor, kan det føre til overfitting af modellen. Endelig kan den rullende tilgang være mere følsom overfor outliers eller pludselige ændringer i dataene, da tidligere data også påvirker prædiktionerne. Hvis der sker pludselige ændringer i dataene, kan det tage tid for modellen at "justere" sig og lave nøjagtige prædiktioner igen. 
+
+
+## i)
+
+Jeg inkluderer nu også `lufttryk` og `luftfugtighed` som prædiktorer. Bemærk, at det nu kun giver mening at prædiktere med metoden fra spørgsmål (h):
+
+
+
+```{r}
+
+# Standardisering af lufttryk og luftfugtighed
+lufttryk_std <- vejrdata$lufttryk_std <- scale(vejrdata$lufttryk)
+luftfugtighed_std <- vejrdata$luftfugtighed_std <- scale(vejrdata$luftfugtighed)
+
+# Definér T, t0 og N
+T <- 20
+t0 <- 32000
+N <- t0 - T
+
+# Opret Xarray og Yarray
+Xarray <- array(rep(NA, N*T*3), dim = c(N, T, 3))
+Yarray <- array(temp_std[(T+1):(t0+1)], dim = c(N, 1, 1))
+
+# Udfyld Xarray og Yarray
+for (i in 1:N) {
+  Xarray[i,,1] <- temp_std[i:(i + T - 1)]
+  Xarray[i,,2] <- lufttryk_std[i:(i + T - 1)]
+  Xarray[i,,3] <- luftfugtighed_std[i:(i + T - 1)]
+}
+
+
+
+
+
+```
+
+
+```{r}
+
+model3 <- keras_model_sequential() %>%
+  layer_lstm(units = 10, input_shape = c(T, 3), activation = "tanh", dropout = 0.001, return_sequences = TRUE) %>%
+  layer_lstm(units = 8, dropout = 0.001, activation = "tanh") %>%
+  layer_dense(units = 1) %>% 
+  
+  compile(loss = "mse", 
+          optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9))
+
+fit3 <- model3 %>% 
+  fit(Xarray, 
+      Yarray, 
+      epochs = 30, 
+      batch_size = 64, 
+      verbose = FALSE
+      )
+
+
+
+```
+
+```{r}
+
+model4 <- keras_model_sequential() %>%
+  layer_simple_rnn(units = 10, input_shape = c(T, 3), activation = "tanh", dropout = 0.001, return_sequences = TRUE) %>%
+  layer_simple_rnn(units = 8, dropout = 0.001, activation = "tanh") %>%
+  layer_dense(units = 1) %>% 
+  
+  compile(loss = "mse", 
+          optimizer = optimizer_rmsprop(learning_rate=0.001, rho=0.9))
+
+fit4 <- model4 %>% 
+  fit(Xarray, 
+      Yarray, 
+      epochs = 30, 
+      batch_size = 64, 
+      verbose = FALSE
+      )
+
+```
+
+
+
+
+```{r}
+
+
+ahead <- 10 # så langt, jeg vil kigge fremad
+
+Xtest1 <- array(rep(NA, T), dim = c(1, T, 3))
+Xtest1[1,,1] <- temp_std[(t0-T+1):t0]
+Xtest1[1,,2] <- lufttryk_std[(t0-T+1):t0]
+Xtest1[1,,3] <- luftfugtighed_std[(t0-T+1):t0]
+
+# Generate test predictions
+test_predictions_LSTM <- rep(NA, ahead)
+test_predictions_Normal <- rep(NA, ahead)
+
+for (i in 1:ahead) {
+  test_predictions_LSTM[i] <- model3 %>% predict(Xtest1)
+  Xtest1[1,1:(T-1),] <- Xtest1[1,2:T,]
+  Xtest1[1,T,1] <- test_predictions[i]
+  Xtest1[1,T,2] <- lufttryk_std[t0+i]
+  Xtest1[1,T,3] <- luftfugtighed_std[t0+i]
+}
+
+for (i in 1:ahead) {
+  test_predictions_Normal[i] <- model4 %>% predict(Xtest1)
+  Xtest1[1,1:(T-1),] <- Xtest1[1,2:T,]
+  Xtest1[1,T,1] <- test_predictions[i]
+  Xtest1[1,T,2] <- lufttryk_std[t0+i]
+  Xtest1[1,T,3] <- luftfugtighed_std[t0+i]
+}
+
+# Scale the predictions back to their original form
+U_pred3 <- test_predictions_LSTM * sd(temperatur) + mean(temperatur)
+U_pred4 <- test_predictions_Normal * sd(temperatur) + mean(temperatur)
+
+plot(temperatur[(t0-99):(t0+ahead)], type="l", lwd=2, xlab="t", ylab = "temperatur", main="Prædiktioner med rullende prognose og lufttryk/fugtighed")
+lines(101:(100+ahead), U_pred3, col="red")
+lines(101:(100+ahead), U_pred4, col="blue")
+legend("topleft", legend=c("Faktisk temperatur", "Model 3 (LSTM, 3 x'er)", "Model 4 (Simpel RNN, 3 x'er)"), col=c("black", "red", "blue"), lty=1)
+
+
+
+# Calculate the MSE
+mse3 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred3)^2)
+mse4 <- mean((temperatur[(t0+1):(t0+ahead)] - U_pred4)^2)
+
+# Print the MSE
+cat("MSE_3:", mse3, "\n", "MSE_4:", mse4)
+
+
+
+
+```
+Det virker til at inkluderingen af `lufttryk` og `luftfugtighed` som prædiktorer gør modellerne bedre til at prædiktere end tilfældet med kun `temperatur` som prædiktorer. Tilføjelsen af lufttryk og luftfugtighed som ekstra lag i `Xarray` giver modellerne mulighed for at lære afhængighederne mellem temperatur, lufttryk og luftfugtighed, og på den måde prædiktere temperatur mere præcist. Lufttryk og luftfugtighed kan påvirke temperatur og derfor er deres tilstedeværelse i modellen vigtig for at tage højde for den effekt, de har på temperaturen.
+
+# Opgave 2
+
+Convolutional neuralt netværk til klassifikation. I denne delopgave skal
+vi benytte et kunstigt fremstillet datasæt. Det vil sige, at du først
+skal køre den medfølgende kodestump, der ligger i filen opgavesat5.R. I
+koden laves i alt 3000 billeder, som hver har størrelsen 20 × 20 pixels.
+Alle billederne ligger i et 3--dimensionalt array kaldet *xdata*.
+
+Der er tre typer af billeder:
+
+-   Rektangler -- disse har fået label--værdien 0 i den tilhørende
+    vektor *ydata*. Bemærk, at rektanglerne varierer i størrelse (både
+    længde og bredde) og placering
+
+-   Cirkler -- disse har fået label--værdien 1 i den tilhørende vektor
+    *ydata*. Bemærk, at cirklerne varierer i både størrelse og placering
+
+-   Linjer -- disse har fået label--værdien 2 i den tilhørende vektor
+    *ydata*. Bemærk, at linjerne varierer i både hældning og skæring.
+
+Bemærk, at der er tilsat støj til alle billederne i kraft af
+normalfordelte variable.
+
+Vi indlæser data her:
+
+```{r}
+set.seed(2023)
+
+N1<-1000
+N2<-1000
+N3<-1000
+
+N<-N1+N2+N3
+
+std<-0.4
+
+xdata<-array(rep(0,N*20*20),dim=c(N,20,20))
+ydata<-rep(NA,N)
+ydata_text<-rep(NA,N)
+
+rmat<-matrix(rep(1:20,20),ncol=20)
+cmat<-matrix(rep(1:20,20),ncol=20,byrow=TRUE)
+
+for (i in 1:N1){
+  c1<-runif(1,7,13)
+  c2<-runif(1,7,13)
+  width1<-runif(1,2,4)
+  width2<-runif(1,2,4)
+  xdata[i,,]<-xdata[i,,]+(cmat<=c1+width1)*(cmat>=c1-width1)*(rmat<=c2+width2)*(rmat>=c2-width2)*1
+  xdata[i,,]<-xdata[i,,]+matrix(rnorm(20*20,mean=0,sd=std),ncol=20)
+}
+
+for (i in (N1+1):(N1+N2)){
+  c1<-sample(7:13,1)
+  c2<-sample(7:13,1)
+  radius<-runif(1,5,6)
+  xdata[i,,]<-xdata[i,,]+(sqrt((rmat-c1)^2+(cmat-c2)^2)<=radius)*1
+  xdata[i,,]<-xdata[i,,]+matrix(rnorm(20*20,mean=0,sd=std),ncol=20)
+}
+
+for (i in (N1+N2+1):(N1+N2+N3)){
+  b<-runif(1,-1,1)
+  slope<-runif(1,0.7,1.3)
+  xdata[i,,]<-xdata[i,,]+(rmat<=1+slope*cmat+b+1)*(rmat>=1+slope*cmat+b-1)*1
+  xdata[i,,]<-xdata[i,,]+matrix(rnorm(20*20,mean=0,sd=std),ncol=20)
+}
+
+ydata[1:N1]<-0
+ydata[(N1+1):(N1+N2)]<-1
+ydata[(N1+N2+1):(N1+N2+N3)]<-2
+
+bland<-sample(1:N)
+xdata<-xdata[bland,,]
+ydata<-ydata[bland]
+
+
+```
+
+Billederne kan inspiceres ved f.eks. at køre:
+
+```{r}
+
+filled.contour(t(xdata[2,20:1,20:1]),col=grey(seq(1,0,length=30)))
+
+```
+
+Her vises f.eks. en cirkel.
+
+## a)
+
+Vi deler datasættet op i en træningsdel og testdel.
+
+```{r}
+
+Ntrain <- 2000
+Ntest <- N-Ntrain
+xtrain_temp <- xdata[1:Ntrain,,]
+ytrain_temp <- ydata[1:Ntrain]
+xtest_temp<-xdata[(Ntrain+1):N,,]
+ytest_temp <- ydata[(Ntrain+1):N]
+
+
+```
+
+Så ligger datasættet opdelt i træning (2000 billeder) og test (1000
+billeder) på samme måde, som datasættet ved forelæsningen.
+
+## b)
+
+Vi standardisere observationsværdierne i billederne og omdanne
+y-variablene til 0-1-kategorier ved hjælp af keras-pakken i R.
+
+```{r}
+
+# Standardisering af x-data
+xtrain <- array(xtrain_temp, dim = c(Ntrain, 20, 20, 1))
+xtest <- array(xtest_temp, dim = c(Ntest, 20, 20, 1))
+xtrain_mean <- mean(xtrain)
+xtrain_sd <- sd(xtrain)
+xtrain <- (xtrain - xtrain_mean) / xtrain_sd
+xtest_mean <- mean(xtest)
+xtest_sd <- sd(xtest)
+xtest <- (xtest - xtest_mean) / xtest_sd
+
+
+# Omdannelse af y-data til 0-1-kategorier
+ytrain <- to_categorical(ytrain_temp, num_classes = 3)
+ytest <- to_categorical(ytest_temp, num_classes = 3)
+
+
+```
+
+## c)
+
+Vi kan opbygge det convolutional neurale netværk ved hjælp af
+keras-pakken i R. Her bruger vi en arkitektur bestående af et
+convolutional lag med 32 filtre, et max-pooling lag, et almindeligt
+skjult neuralt netværkslag med 64 neuroner og et outputlag med 3
+neuroner (en for hver klasse). Vi bruger også dropout-lag for at undgå
+overfitting:
+
+```{r}
+
+# Definition af modellen
+model <- keras_model_sequential() %>%
+  layer_conv_2d(filters = 32, kernel_size = c(3, 3), activation = "relu",
+                input_shape = c(20, 20, 1)) %>%
+  layer_max_pooling_2d(pool_size = c(2, 2)) %>%
+  layer_flatten() %>%
+  layer_dense(units = 64, activation = "relu") %>%
+  layer_dropout(rate = 0.5) %>%
+  layer_dense(units = 3, activation = "softmax")
+
+# Træning af modellen
+model %>% compile(
+  loss = loss_categorical_crossentropy,
+  optimizer = optimizer_rmsprop(),
+  metrics = c("accuracy")
+)
+
+fit <- model %>% fit(
+  xtrain, ytrain,
+  epochs = 15,
+  batch_size = 128,
+  validation_split = 0.2,
+  verbose = FALSE
+)
+
+
+
+
+```
+
+## d)
+
+Vi kan bede om at få udskrevet et summary af modellen ved at køre
+`summary()`-funktionen på *model*-objektet:
+
+```{r}
+
+summary(model)
+
+plot(fit)
+
+fit
+
+```
+
+Vi kan se, at modellen har 166,467 trænbare parametre, og at inputtet
+forventes at have formen (None, 20, 20, 1) (hvor "None" står for
+batch-størrelsen). Som også er det forventede.
+
+## e)
+
+Vi fitter netværket på testdatasættet og finder fejlraten, og finder ud
+af hvilke billeder den har sværest ved at identificere.
+
+```{r}
+
+set.seed(2023)
+
+# Generer forudsigelser for testdatasættet
+pred <- model %>% predict(xtest, batch_size = Ntest)
+
+# Konverter forudsigelser til klasser
+pred_classes <- max.col(pred) - 1
+
+# Sammenlign forudsigelser med de korrekte klasser
+correct <- pred_classes == ytest_temp
+
+# Beregn fejlraten
+error_rate <- 1 - mean(correct)
+
+# Udskriv fejlraten
+cat("Error rate:", error_rate, "\n")
+
+# Find billeder, der blev forkert identificeret
+wrong <- which(pred_classes != ytest_temp)
+
+# Udskriv antallet af forkert identificerede billeder
+cat("Number of wrong predictions:", length(wrong), "\n")
+
+# Tæl antallet af forkerte forudsigelser for hver kategori
+table(ytest_temp[wrong], pred_classes[wrong])
+
+
+```
+
+Det viser sig, at det kun er cirklerne der er vanskelige at prædiktere.
+Selvom netværket umiddelbart performer rigtig godt. Højere
+standardafvigelse gør modellen dårlige i sin prædiktionsevne og vice
+versa (hvilket også er meget intuitivt, da det angiver hvor meget støj
+der er i data).
